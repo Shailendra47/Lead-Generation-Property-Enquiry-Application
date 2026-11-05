@@ -113,8 +113,32 @@ function checkMobile() {
 }
 mobile.addEventListener("input", checkMobile);
 
+// Clean accidental stray quotes/backticks on blur
+document.querySelectorAll("input").forEach((inp) => {
+  inp.addEventListener("blur", () => {
+    if (inp.type === "email" || inp.name === "email" || inp.name === "first_name" || inp.name === "last_name") {
+      inp.value = inp.value.replace(/[`'"]/g, "").trim();
+    }
+  });
+});
+
 form.addEventListener("submit", async (e) => {
   e.preventDefault();
+
+  // Auto-clean stray backticks, quotes, or whitespace before validity check
+  const emailInput = form.elements.namedItem("email");
+  if (emailInput) {
+    emailInput.value = emailInput.value.replace(/[`'"]/g, "").trim();
+  }
+  const fnInput = form.elements.namedItem("first_name");
+  if (fnInput) {
+    fnInput.value = fnInput.value.replace(/[`'"]/g, "").trim();
+  }
+  const lnInput = form.elements.namedItem("last_name");
+  if (lnInput) {
+    lnInput.value = lnInput.value.replace(/[`'"]/g, "").trim();
+  }
+
   checkMobile();
 
   if (!form.checkValidity()) {
@@ -130,6 +154,20 @@ form.addEventListener("submit", async (e) => {
 
   const payload = {};
   new FormData(form).forEach((value, key) => (payload[key] = value.trim()));
+
+  // Strict email validation: uppercase/capitalized letters are prohibited; lowercase, numbers, @ required
+  const rawEmail = (payload.email || "").trim();
+  if (/[A-Z]/.test(rawEmail)) {
+    showError("Email must be strictly lowercase (lowercase letters, numbers, and @ sign only, no uppercase or capitalized letters).", "INVALID EMAIL FORMAT", emailInput);
+    if (emailInput) emailInput.focus();
+    return;
+  }
+  const lowercaseEmailPattern = /^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/;
+  if (!lowercaseEmailPattern.test(rawEmail)) {
+    showError("Please enter a valid lowercase email address with numbers and @ sign (e.g. name123@gmail.com).", "INVALID EMAIL FORMAT", emailInput);
+    if (emailInput) emailInput.focus();
+    return;
+  }
 
   // Merge country code with mobile number into E.164 international format
   const countryCode = form.elements.namedItem("country_code")?.value || "+91";
@@ -152,6 +190,9 @@ form.addEventListener("submit", async (e) => {
   payload.mobile_number = rawNumber.startsWith("+") ? `+${digitsOnly}` : `${countryCode}${digitsOnly}`;
   delete payload.country_code;
 
+  const optInEl = form.elements.namedItem("whatsapp_opt_in") || document.getElementById("whatsapp_opt_in");
+  payload.whatsapp_opt_in = optInEl ? Boolean(optInEl.checked) : true;
+
   submitBtn.disabled = true;
   submitBtn.textContent = "Submitting...";
 
@@ -164,29 +205,48 @@ form.addEventListener("submit", async (e) => {
     const data = await res.json();
 
     if (res.ok) {
-      submitBtn.disabled = false;
-      submitBtn.textContent = "Submit Enquiry";
+      const waUrl = data.whatsapp_url;
+      if (payload.whatsapp_opt_in && waUrl) {
+        submitBtn.disabled = false;
+        submitBtn.setAttribute("type", "button");
+        submitBtn.innerHTML = '<span style="display:inline-flex;align-items:center;justify-content:center;gap:8px;"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12.04 2c-5.46 0-9.91 4.45-9.91 9.91 0 1.75.46 3.45 1.32 4.95L2.05 22l5.25-1.38c1.45.79 3.08 1.21 4.74 1.21 5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01A9.816 9.816 0 0 0 12.04 2z"/></svg> Redirecting to WhatsApp...</span>';
+        submitBtn.style.background = "#25D366";
+        submitBtn.style.color = "#ffffff";
+        submitBtn.onclick = (ev) => {
+          ev.preventDefault();
+          window.location.href = waUrl;
+        };
 
-      const whatsappUrl = data.whatsapp_url || "https://wa.me/14155238886?text=Hi";
-      const phoneMatch = whatsappUrl.match(/wa\.me\/(\d+)/);
-      const phoneDigits = phoneMatch ? phoneMatch[1] : "14155238886";
-
-      const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-      const appUrl = `whatsapp://send?phone=${phoneDigits}&text=Hi`;
-
-      // Trigger native WhatsApp application directly on device
-      window.location.href = appUrl;
-
-      if (isMobile) {
-        setTimeout(() => {
-          window.location.href = `https://api.whatsapp.com/send?phone=${phoneDigits}&text=Hi`;
-        }, 2500);
+        // Guaranteed redirect that bypasses browser async popup blockers
+        const isMobile = /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        if (isMobile) {
+          window.location.href = waUrl;
+        } else {
+          let openedWin = null;
+          try {
+            openedWin = window.open(waUrl, "_blank");
+          } catch (_) {
+            openedWin = null;
+          }
+          if (!openedWin || openedWin.closed || typeof openedWin.closed === "undefined") {
+            window.location.href = waUrl;
+          }
+        }
+      } else {
+        submitBtn.disabled = true;
+        submitBtn.textContent = "✓ Enquiry Submitted Successfully!";
       }
-
-      // Refresh page after submitting
       setTimeout(() => {
-        window.location.reload();
-      }, 1200);
+        form.reset();
+        submitBtn.disabled = false;
+        submitBtn.setAttribute("type", "submit");
+        submitBtn.textContent = "Submit Enquiry";
+        submitBtn.style.background = "";
+        submitBtn.style.color = "";
+        submitBtn.onclick = null;
+        const optIn = document.getElementById("whatsapp_opt_in");
+        if (optIn) optIn.checked = true;
+      }, 7000);
       return;
     } else if (res.status === 422) {
       showError(presentApiError(data, 422), "CHECK YOUR DETAILS");
@@ -291,3 +351,6 @@ locList.addEventListener("mousedown", (e) => {
   const li = e.target.closest("li[data-i]");
   if (li) { e.preventDefault(); pickLocation(Number(li.dataset.i)); }
 });
+
+
+

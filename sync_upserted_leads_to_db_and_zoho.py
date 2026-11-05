@@ -57,9 +57,10 @@ def run_upsert_database_sync():
     upsert_col.create_index("zoho_sync_status")
     upsert_col.create_index("zoho_lead_id")
 
-    # 2. Fetch all raw contacts and property enquiries
+    # 2. Fetch all raw contacts, property enquiries, and WhatsApp conversations
     contacts_docs = list(db[COLLECTION_NAME].find())
     enquiries_docs = list(db[ENQUIRY_COLLECTION_NAME].find())
+    conversations_docs = list(db["whatsapp_conversations"].find())
 
     # Format documents with string IDs for builder
     contacts = []
@@ -74,10 +75,16 @@ def run_upsert_database_sync():
         e_copy["id"] = str(e.get("_id", ""))
         enquiries.append(e_copy)
 
-    print(f"Fetched {len(contacts)} contacts and {len(enquiries)} property enquiries.")
+    conversations = []
+    for w in conversations_docs:
+        w_copy = dict(w)
+        w_copy["id"] = str(w.get("_id", ""))
+        conversations.append(w_copy)
+
+    print(f"Fetched {len(contacts)} contacts, {len(enquiries)} property enquiries, and {len(conversations)} WhatsApp conversations.")
 
     # 3. Deduplicate & unify into upserted leads
-    upserted_leads = build_upserted_leads(contacts, enquiries)
+    upserted_leads = build_upserted_leads(contacts, enquiries, conversations)
     print(f"Generated {len(upserted_leads)} deduplicated unified lead records.")
     print("-" * 80)
 
@@ -95,12 +102,26 @@ def run_upsert_database_sync():
         ident = lead.get("email") or lead.get("phone") or lead_id
         is_hot = (lead.get("lead_rating") == "Hot")
 
-        # Preserve existing zoho_lead_id from database if already present
+        # Ensure every lead has an executive Google Gemini AI analysis
+        if not lead.get("ai_analysis"):
+            try:
+                import conversation_ai
+                ai_eval = conversation_ai.analyze_lead_with_ai(lead)
+                lead["ai_analysis"] = ai_eval.get("summary", "")
+                lead["ai_triggers"] = ai_eval.get("triggers", [])
+            except Exception:
+                pass
+
+        # Preserve existing zoho_lead_id from database if already present ONLY if lead is Hot
         existing = upsert_col.find_one({"id": lead_id})
-        if existing and existing.get("zoho_lead_id") and not lead.get("zoho_lead_id"):
+        if is_hot and existing and existing.get("zoho_lead_id") and not lead.get("zoho_lead_id"):
             lead["zoho_lead_id"] = existing["zoho_lead_id"]
             lead["zoho_sync_status"] = "synced"
             lead["zoho_synced_at"] = existing.get("zoho_synced_at", now)
+        elif not is_hot:
+            lead["zoho_lead_id"] = None
+            lead["zoho_sync_status"] = "skipped_cold"
+            lead["zoho_sync_reason"] = "Filtered from Zoho CRM (Hot leads only)"
 
         # Check if already synced in Zoho
         if is_hot and lead.get("zoho_lead_id"):

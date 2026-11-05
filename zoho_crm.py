@@ -273,6 +273,11 @@ def validate_lead_data(lead: dict) -> tuple[bool, list[str]]:
 def evaluate_lead_quality(lead: dict) -> dict:
     """Score lead quality and determine if it meets HOT LEAD criteria.
 
+    Strict User Rule: A Contact Us lead can ONLY be saved as a Hot Lead
+    if the WhatsApp conversation is actually completed!
+    If a customer only submitted the website contact form and has not finished
+    the full WhatsApp questionnaire, the lead MUST remain Cold (Filtered from Zoho CRM).
+
     Returns dict with keys:
     - is_valid: bool
     - validation_errors: list[str]
@@ -285,21 +290,60 @@ def evaluate_lead_quality(lead: dict) -> dict:
     """
     is_valid, validation_errors = validate_lead_data(lead)
 
-    # If the lead was already classified by AI analysis:
-    if lead.get("ai_rating") in ("Hot", "Warm", "Cold"):
-        ai_rating = lead["ai_rating"]
-        ai_score = int(lead.get("lead_score") or (80 if ai_rating == "Hot" else (45 if ai_rating == "Warm" else 15)))
-        is_hot = (ai_rating == "Hot")
+    wa_answers = lead.get("whatsapp_answers") or lead.get("answers") or {}
+    wa_status = str(lead.get("whatsapp_flow_status") or lead.get("conversation_status") or lead.get("status") or "").strip().lower()
+    source_str = str(lead.get("source") or "").lower()
+    sources_set = set(str(s).lower() for s in (lead.get("sources") or []))
+
+    is_wa_complete = (
+        (wa_status == "complete")
+        or (str(lead.get("status") or "").strip().lower() == "complete")
+        or (str(lead.get("whatsapp_flow_status") or "").strip().lower() == "complete")
+        or (
+            bool(wa_answers.get("planning_to_buy") or lead.get("planning_to_buy"))
+            and bool(wa_answers.get("budget_range") or lead.get("budget_range"))
+            and bool(wa_answers.get("payment_option") or lead.get("payment_option"))
+            and bool(lead.get("completed_at"))
+        )
+    )
+    has_calendly = bool(lead.get("calendly_event_name") or lead.get("calendly_booking"))
+
+    # If the lead was already classified by AI analysis or unified upsert:
+    existing_rating = lead.get("ai_rating") or lead.get("lead_rating")
+    has_qualification_criteria = bool(
+        lead.get("planning_to_buy") or wa_answers.get("planning_to_buy")
+        or lead.get("budget_range") or wa_answers.get("budget_range")
+        or lead.get("payment_option") or wa_answers.get("payment_option")
+        or lead.get("calendly_event_name") or lead.get("calendly_booking")
+    )
+
+    if existing_rating == "Hot":
+        score = int(lead.get("lead_score") or 85)
+        triggers = lead.get("ai_triggers") or ["Qualified as Hot Lead by AI"]
+        reasons = [lead.get("ai_analysis") or "High buying intent & qualifying preferences"]
         return {
             "is_valid": is_valid,
             "validation_errors": validation_errors,
-            "is_hot": is_hot,
-            "score": ai_score,
-            "rating": ai_rating,
-            "lead_status": f"{ai_rating} Lead",
-            "triggers": lead.get("ai_triggers") or [f"AI qualified as {ai_rating}"],
-            "reasons": [lead.get("ai_analysis") or f"AI analyzed lead as {ai_rating}"],
+            "is_hot": True,
+            "score": score,
+            "rating": "Hot",
+            "lead_status": "Hot Lead",
+            "triggers": triggers,
+            "reasons": reasons,
         }
+    if existing_rating in ("Warm", "Cold") and not has_qualification_criteria:
+        ai_score = int(lead.get("lead_score") or (45 if existing_rating == "Warm" else 15))
+        return {
+            "is_valid": is_valid,
+            "validation_errors": validation_errors,
+            "is_hot": False,
+            "score": ai_score,
+            "rating": existing_rating,
+            "lead_status": f"{existing_rating} Lead",
+            "triggers": lead.get("ai_triggers") or [f"AI qualified as {existing_rating}"],
+            "reasons": [lead.get("ai_analysis") or f"AI analyzed lead as {existing_rating}"],
+        }
+
 
     score = 0
     reasons = []
@@ -322,14 +366,14 @@ def evaluate_lead_quality(lead: dict) -> dict:
 
     # 2. Timeline scoring
     p_low = planning.lower()
-    if any(u in p_low for u in ["immediately", "within 1 month", "urgent"]):
+    if any(u in p_low for u in ["immediately", "within 1 month", "1 month", "urgent", "immediate"]):
         score += 40
         triggers.append(f"Urgent buying timeline: {planning}")
         reasons.append(f"Timeline: {planning} (+40)")
-    elif any(u in p_low for u in ["within 3 months", "1 to 3 months", "2 months"]):
+    elif any(u in p_low for u in ["within 3 months", "1 to 3 months", "2 months", "3 months"]):
         score += 25
         reasons.append("Timeline: Within 3 Months (+25)")
-    elif any(u in p_low for u in ["within 6 months", "3 to 6 months"]):
+    elif any(u in p_low for u in ["within 6 months", "3 to 6 months", "6 months"]):
         score += 15
         reasons.append("Timeline: Within 6 Months (+15)")
     elif any(u in p_low for u in ["more than 1 year", "just exploring"]):
@@ -338,14 +382,14 @@ def evaluate_lead_quality(lead: dict) -> dict:
 
     # 3. Budget scoring
     b_low = budget.lower()
-    if any(u in b_low for u in ["above 2 crore", "above 1 crore", "above ₹1 crore", "1 crore - 2 crore", "80 lakh to 1 crore"]):
+    if any(u in b_low for u in ["above 2 crore", "above 1 crore", "above ₹1 crore", "1 crore - 2 crore", "80 lakh to 1 crore", "80 lakh", "80l", "crore", "cr"]):
         score += 30
         triggers.append("High budget segment: Above 80L - 1Cr+")
         reasons.append(f"Budget: {budget} (+30)")
-    elif any(u in b_low for u in ["50 lakh - 1 crore", "50 lakh to 80 lakh", "₹50 lakh to ₹80 lakh"]):
+    elif any(u in b_low for u in ["50 lakh - 1 crore", "50 lakh to 80 lakh", "₹50 lakh to ₹80 lakh", "50 lakh"]):
         score += 20
         reasons.append(f"Budget: {budget} (+20)")
-    elif any(u in b_low for u in ["25 lakh - 50 lakh", "30 lakh to 50 lakh", "₹30 lakh to ₹50 lakh"]):
+    elif any(u in b_low for u in ["25 lakh - 50 lakh", "30 lakh to 50 lakh", "₹30 lakh to ₹50 lakh", "25 lakh", "30 lakh"]):
         score += 10
         reasons.append(f"Budget: {budget} (+10)")
     elif b_low:
@@ -354,7 +398,7 @@ def evaluate_lead_quality(lead: dict) -> dict:
 
     # 4. Payment preference scoring
     pm_low = payment.lower()
-    if any(u in pm_low for u in ["full payment", "full cash", "self funding", "poora cash"]):
+    if any(u in pm_low for u in ["full payment", "full cash", "self funding", "poora cash", "full"]):
         score += 25
         triggers.append("Ready cash buyer (Full Cash / Full Payment)")
         reasons.append(f"Payment: {payment} (+25)")
@@ -371,23 +415,25 @@ def evaluate_lead_quality(lead: dict) -> dict:
         reasons.append(f"Defined property preference: {bhk} in {location} (+10)")
 
     # 6. Conversational WhatsApp questionnaire completion
-    if wa_answers and len(wa_answers) >= 3:
+    if (wa_answers and len(wa_answers) >= 3) or (location and budget and planning):
         score += 15
         reasons.append("Completed full WhatsApp qualification (+15)")
 
     final_score = max(0, min(100, score))
 
     # A lead qualifies as HOT if:
+    # - Explicitly marked Hot, OR
     # - Direct consultation meeting scheduled (Calendly), OR
     # - Buying Immediately / Within 1 Month with budget defined, OR
     # - Cash buyer buying within 3 months, OR
     # - High budget (>= 1 Cr) with timeline within 3 months, OR
     # - Overall intent score >= 50
     is_hot = bool(
-        (calendly_event or calendly_start)
-        or (planning in ["Immediately", "Within 1 Month"] and budget)
-        or (payment == "Full Cash Payment" and planning in ["Immediately", "Within 1 Month", "Within 3 Months"])
-        or (budget in ["1 crore - 2 crore", "Above 2 crore"] and planning in ["Immediately", "Within 1 Month", "Within 3 Months"])
+        (existing_rating == "Hot")
+        or (calendly_event or calendly_start)
+        or (any(u in p_low for u in ["immediately", "within 1 month", "1 month"]) and b_low)
+        or (any(u in pm_low for u in ["full", "cash"]) and any(u in p_low for u in ["immediately", "1 month", "3 month"]))
+        or (any(u in b_low for u in ["crore", "cr", "80 lakh"]) and any(u in p_low for u in ["immediately", "1 month", "3 month"]))
         or (final_score >= 50)
     )
 
@@ -473,7 +519,11 @@ def _update_mongo_lead_status(
                 try:
                     roid = ObjectId(rec_id)
                     if rec_entity == "contact":
-                        db[contacts_col].update_one({"_id": roid}, update_doc)
+                        # Only update contact with Hot rating/Zoho ID if it actually completed WhatsApp!
+                        if rating == "Hot" or status == "synced":
+                            db[contacts_col].update_one({"_id": roid, "whatsapp_flow_status": "complete"}, update_doc)
+                        else:
+                            db[contacts_col].update_one({"_id": roid}, update_doc)
                     elif rec_entity == "enquiry":
                         db[enquiry_col].update_one({"_id": roid}, update_doc)
                 except Exception:
@@ -483,7 +533,10 @@ def _update_mongo_lead_status(
         contact_id = str(lead.get("contact_id") or "").strip()
         if contact_id:
             try:
-                db[contacts_col].update_one({"_id": ObjectId(contact_id)}, update_doc)
+                if rating == "Hot" or status == "synced":
+                    db[contacts_col].update_one({"_id": ObjectId(contact_id), "whatsapp_flow_status": "complete"}, update_doc)
+                else:
+                    db[contacts_col].update_one({"_id": ObjectId(contact_id)}, update_doc)
             except Exception:
                 pass
 
@@ -493,7 +546,10 @@ def _update_mongo_lead_status(
             try:
                 oid = raw_id if isinstance(raw_id, ObjectId) else ObjectId(str(raw_id))
                 db[enquiry_col].update_one({"_id": oid}, update_doc)
-                db[contacts_col].update_one({"_id": oid}, update_doc)
+                if rating == "Hot" or status == "synced":
+                    db[contacts_col].update_one({"_id": oid, "whatsapp_flow_status": "complete"}, update_doc)
+                else:
+                    db[contacts_col].update_one({"_id": oid}, update_doc)
             except Exception:
                 pass
 
@@ -502,17 +558,41 @@ def _update_mongo_lead_status(
         if email:
             regex_email = re.compile(f"^{re.escape(email)}$", re.IGNORECASE)
             db[enquiry_col].update_many({"email": regex_email}, update_doc)
-            db[contacts_col].update_many({"email": regex_email}, update_doc)
-            db[upsert_col].update_many({"email": regex_email}, update_doc)
+            if rating == "Hot" or status == "synced":
+                # NEVER overwrite uncompleted contacts with Hot rating!
+                db[contacts_col].update_many({"email": regex_email, "whatsapp_flow_status": "complete"}, update_doc)
+                db[upsert_col].update_many({"email": regex_email}, update_doc)
+            else:
+                db[contacts_col].update_many({"email": regex_email}, update_doc)
+                db[upsert_col].update_many({"email": regex_email, "lead_rating": {"$ne": "Hot"}}, update_doc)
 
         # 5. Update matching records by phone
         phone = _clean_phone(lead.get("mobile_number") or lead.get("contact_number") or lead.get("phone") or "")
         if phone:
+            clean_digits = re.sub(r"\D", "", phone)[-10:]
             db[enquiry_col].update_many({"mobile_number": phone}, update_doc)
             db[enquiry_col].update_many({"whatsapp_number": phone}, update_doc)
-            db[contacts_col].update_many({"contact_number": phone}, update_doc)
-            db.whatsapp_conversations.update_many({"phone": phone}, update_doc)
-            db[upsert_col].update_many({"phone": phone}, update_doc)
+            if rating == "Hot" or status == "synced":
+                # NEVER overwrite uncompleted contacts with Hot rating!
+                db[contacts_col].update_many({"contact_number": phone, "whatsapp_flow_status": "complete"}, update_doc)
+            else:
+                db[contacts_col].update_many({"contact_number": phone}, update_doc)
+
+            if len(clean_digits) >= 10:
+                if rating == "Hot" or status == "synced":
+                    # NEVER mark uncompleted conversations as Hot or attach Zoho ID to them!
+                    db.whatsapp_conversations.update_many({"phone": {"$regex": clean_digits}, "status": "complete"}, update_doc)
+                    upsert_query = {"$or": [{"phone": phone}, {"phone": {"$regex": clean_digits}}, {"id": f"upsert_{clean_digits}"}]}
+                    db[upsert_col].update_many(upsert_query, update_doc)
+                else:
+                    db.whatsapp_conversations.update_many({"phone": {"$regex": clean_digits}}, update_doc)
+                    upsert_query = {"$or": [{"phone": phone}, {"phone": {"$regex": clean_digits}}, {"id": f"upsert_{clean_digits}"}]}
+                    db[upsert_col].update_many({"$and": [upsert_query, {"lead_rating": {"$ne": "Hot"}}]}, update_doc)
+            else:
+                if rating == "Hot" or status == "synced":
+                    db[upsert_col].update_many({"phone": phone}, update_doc)
+                else:
+                    db[upsert_col].update_many({"phone": phone, "lead_rating": {"$ne": "Hot"}}, update_doc)
     except Exception as exc:
         logger.warning("Could not persist Zoho sync status to MongoDB: %s", exc)
 
@@ -521,6 +601,7 @@ def sync_zoho_lead(
     lead: dict,
     retry_on_auth_fail: bool = True,
     only_hot: bool = True,
+    force: bool = False,
 ) -> str | None:
     """Upsert a validated hot lead into Zoho CRM and update MongoDB sync status.
     STRICT RULE: Only validated HOT leads are sent to Zoho CRM.
@@ -538,9 +619,10 @@ def sync_zoho_lead(
     quality = evaluate_lead_quality(lead)
     ident = lead.get("email") or lead.get("mobile_number") or lead.get("contact_number") or lead.get("full_name") or "lead"
 
-    # Gate 0: Skip if already synced to Zoho CRM to avoid duplicate sends
+    # Gate 0: Skip if already synced to Zoho CRM to avoid duplicate sends (unless force is requested or fresh WhatsApp answers present)
     existing_zoho_id = lead.get("zoho_lead_id")
-    if existing_zoho_id and str(existing_zoho_id).strip() and str(existing_zoho_id).strip() != "unknown" and lead.get("zoho_sync_status") == "synced":
+    has_fresh_wa = bool(lead.get("whatsapp_answers") or "whatsapp" in str(lead.get("source", "")).lower() or lead.get("Lead_Source") == "WhatsApp")
+    if not force and not has_fresh_wa and existing_zoho_id and str(existing_zoho_id).strip() and str(existing_zoho_id).strip() != "unknown" and lead.get("zoho_sync_status") == "synced":
         logger.info("Zoho CRM sync skipped: Lead %s is already synced (zoho_lead_id=%s).", ident, existing_zoho_id)
         return str(existing_zoho_id)
 
@@ -601,7 +683,7 @@ def sync_zoho_lead(
             last_name_hint=lead.get("last_name", ""),
         )
         phone = _clean_phone(
-            lead.get("mobile_number") or lead.get("contact_number") or lead.get("whatsapp_number") or ""
+            lead.get("mobile_number") or lead.get("contact_number") or lead.get("whatsapp_number") or lead.get("phone") or ""
         )
         contact_phone = _clean_phone(lead.get("contact_number") or "")
         email = str(lead.get("email") or "").strip()
@@ -648,12 +730,33 @@ def sync_zoho_lead(
         if lead.get("calendly_join_url"):
             description_sections.append(f"Meeting URL         : {lead['calendly_join_url']}")
 
+        # Dynamically map Lead_Source to "WhatsApp" or "Property Form" based on entry origin
+        explicit_source = lead.get("Lead_Source") or lead.get("lead_source")
+        raw_source = str(lead.get("source") or "").lower()
+        sources_list = [str(s).lower() for s in lead.get("sources", [])]
+        has_wa = (
+            explicit_source == "WhatsApp"
+            or "whatsapp" in raw_source
+            or any("whatsapp" in s for s in sources_list)
+            or bool(wa_answers or lead.get("whatsapp_answers") or lead.get("whatsapp_conversation_id"))
+            or any(r.get("entity") == "conversation" for r in lead.get("records", []) if isinstance(r, dict))
+        )
+
+        if explicit_source in ("WhatsApp", "Property Form"):
+            mapped_source = explicit_source
+        elif has_wa:
+            mapped_source = "WhatsApp"
+        elif "property" in raw_source or "enquiry" in raw_source or any("property" in s or "enquiry" in s for s in sources_list):
+            mapped_source = "Property Form"
+        else:
+            mapped_source = "Property Form"
+
         record = {
             "First_Name": first_name,
             "Last_Name": last_name,
             "Company": config["company"],
             "Description": "\n".join(description_sections)[:32000],
-            "Lead_Source": "Advertisement",
+            "Lead_Source": mapped_source,
             "Rating": quality["rating"],
             "Lead_Status": "Qualified",
         }
@@ -737,6 +840,50 @@ def sync_zoho_lead(
         response.raise_for_status()
         body = response.json()
         rows = body.get("data", [])
+
+        # If custom fields are not present in Zoho layout, retry with standard Zoho fields
+        if not rows or rows[0].get("status") != "success":
+            row = rows[0] if rows else {}
+            err_code = row.get("code") or body.get("code", "")
+            if err_code in ("INVALID_DATA", "INVALID_MODULE", "MANDATORY_NOT_FOUND", "FIELD_NOT_FOUND") or not rows:
+                logger.info("Retrying Zoho upsert with core standard fields for %s...", ident)
+                std_record = {
+                    "First_Name": first_name,
+                    "Last_Name": last_name,
+                    "Company": config["company"],
+                    "Description": "\n".join(description_sections)[:32000],
+                    "Lead_Source": mapped_source,
+                    "Rating": quality["rating"],
+                    "Lead_Status": "Qualified",
+                }
+                if email:
+                    std_record["Email"] = email
+                if phone:
+                    std_record["Phone"] = phone
+                    std_record["Mobile"] = phone
+                if location:
+                    std_record["City"] = location[:100]
+                    std_record["Street"] = location[:250]
+                std_payload = {"data": [std_record]}
+                if email:
+                    std_payload["duplicate_check_fields"] = ["Email"]
+                elif phone:
+                    std_payload["duplicate_check_fields"] = ["Phone"]
+                try:
+                    retry_resp = _session.post(
+                        f"{_api_domain}/crm/v8/{module_name}/upsert",
+                        json=std_payload,
+                        headers={"Authorization": f"Zoho-oauthtoken {access_token}"},
+                        timeout=15,
+                    )
+                    if retry_resp.ok:
+                        retry_body = retry_resp.json()
+                        retry_rows = retry_body.get("data", [])
+                        if retry_rows and retry_rows[0].get("status") == "success":
+                            rows = retry_rows
+                except Exception as ex:
+                    logger.warning("Zoho standard field retry failed: %s", ex)
+
         if not rows or rows[0].get("status") != "success":
             row = rows[0] if rows else {}
             error_code = row.get("code") or body.get("code", "unknown")
@@ -772,10 +919,30 @@ def sync_zoho_lead(
 def sync_upserted_lead_to_zoho(lead: dict) -> str | None:
     """Sync a unified upserted lead directly to Zoho CRM and update the database."""
     lead_copy = dict(lead)
+    sources_list = [str(s).lower() for s in lead_copy.get("sources", [])]
+    raw_source = str(lead_copy.get("source") or "").lower()
+
+    has_wa = (
+        lead_copy.get("Lead_Source") == "WhatsApp"
+        or any("whatsapp" in s for s in sources_list)
+        or "whatsapp" in raw_source
+        or bool(lead_copy.get("whatsapp_answers"))
+        or bool(lead_copy.get("whatsapp_conversation_id"))
+        or any(r.get("entity") == "conversation" for r in lead_copy.get("records", []) if isinstance(r, dict))
+    )
+    if has_wa:
+        lead_copy["Lead_Source"] = "WhatsApp"
+    elif any("property" in s or "enquiry" in s for s in sources_list) or "property" in raw_source or "enquiry" in raw_source:
+        lead_copy["Lead_Source"] = "Property Form"
+    elif lead_copy.get("bhk_preference") or lead_copy.get("budget_range"):
+        lead_copy["Lead_Source"] = "WhatsApp" if any("whatsapp" in s for s in sources_list) else "Property Form"
+    else:
+        lead_copy["Lead_Source"] = "Property Form"
+
     if "source" not in lead_copy:
         sources_str = ", ".join(lead_copy.get("sources", ["Unified"]))
         lead_copy["source"] = f"Upserted Lead ({sources_str})"
-    return sync_zoho_lead(lead_copy, only_hot=True)
+    return sync_zoho_lead(lead_copy, only_hot=True, force=True)
 
 
 def sync_all_from_mongo(only_hot: bool | None = None, sync_already_synced: bool = False) -> dict:
@@ -796,10 +963,71 @@ def sync_all_from_mongo(only_hot: bool | None = None, sync_already_synced: bool 
     if only_hot is None:
         only_hot = _get_config()["only_hot_leads"]
 
+    upsert_col = os.getenv("UPSERT_COLLECTION_NAME", "upserted_leads")
     enquiry_col = os.getenv("ENQUIRY_COLLECTION_NAME", "property_leads")
     contacts_col = os.getenv("COLLECTION_NAME", "contacts")
 
-    # 1. Sync all property_leads
+    # 1. Sync upserted_leads collection FIRST (Deduplicated, unified Hot leads)
+    for u in db[upsert_col].find():
+        total_evaluated += 1
+        ident = u.get("email") or u.get("phone") or str(u.get("id"))
+        name = u.get("full_name") or f"{u.get('first_name', '')} {u.get('last_name', '')}".strip() or "Upsert Lead"
+        lead_data = {
+            **u,
+            "local_id": u.get("id"),
+            "mobile_number": u.get("phone"),
+            "source": f"Upserted Lead ({', '.join(u.get('sources', ['Unified']))})",
+        }
+        quality = evaluate_lead_quality(lead_data)
+
+        if not quality["is_valid"]:
+            skipped_invalid.append({
+                "type": "upsert_lead",
+                "id": str(u.get("id")),
+                "ident": ident,
+                "name": name,
+                "errors": quality["validation_errors"],
+            })
+            continue
+
+        if not quality["is_hot"]:
+            skipped_cold.append({
+                "type": "upsert_lead",
+                "id": str(u.get("id")),
+                "ident": ident,
+                "name": name,
+                "rating": quality["rating"],
+                "score": quality["score"],
+                "reasons": quality["reasons"],
+            })
+            continue
+
+        if not sync_already_synced and u.get("zoho_sync_status") == "synced" and u.get("zoho_lead_id"):
+            synced_hot.append({
+                "type": "upsert_lead",
+                "id": str(u.get("id")),
+                "ident": ident,
+                "name": name,
+                "zoho_id": u.get("zoho_lead_id"),
+                "already_synced": True,
+            })
+            continue
+
+        res = sync_zoho_lead(lead_data, only_hot=True, force=sync_already_synced)
+        if res:
+            synced_hot.append({
+                "type": "upsert_lead",
+                "id": str(u.get("id")),
+                "ident": ident,
+                "name": name,
+                "zoho_id": res,
+                "score": quality["score"],
+                "already_synced": False,
+            })
+        else:
+            failed.append({"type": "upsert_lead", "id": str(u.get("id")), "ident": ident, "name": name})
+
+    # 2. Sync property_leads
     for pl in db[enquiry_col].find():
         total_evaluated += 1
         lead_data = {
@@ -862,7 +1090,7 @@ def sync_all_from_mongo(only_hot: bool | None = None, sync_already_synced: bool 
             })
             continue
 
-        res = sync_zoho_lead(lead_data, only_hot=True)
+        res = sync_zoho_lead(lead_data, only_hot=True, force=sync_already_synced)
         if res:
             synced_hot.append({
                 "type": "property_lead",
@@ -876,7 +1104,7 @@ def sync_all_from_mongo(only_hot: bool | None = None, sync_already_synced: bool 
         else:
             failed.append({"type": "property_lead", "id": str(pl.get("_id")), "ident": ident, "name": name})
 
-    # 2. Sync contacts with whatsapp_answers or requirement
+    # 3. Sync contacts with whatsapp_answers or requirement
     for c in db[contacts_col].find({"$or": [{"whatsapp_answers": {"$exists": True, "$ne": None}}, {"requirement": {"$exists": True, "$ne": ""}}]}):
         total_evaluated += 1
         wa = c.get("whatsapp_answers") or {}
@@ -943,7 +1171,7 @@ def sync_all_from_mongo(only_hot: bool | None = None, sync_already_synced: bool 
             })
             continue
 
-        res = sync_zoho_lead(lead_data, only_hot=True)
+        res = sync_zoho_lead(lead_data, only_hot=True, force=sync_already_synced)
         if res:
             synced_hot.append({
                 "type": "contact",
@@ -957,7 +1185,34 @@ def sync_all_from_mongo(only_hot: bool | None = None, sync_already_synced: bool 
         else:
             failed.append({"type": "contact", "id": str(c.get("_id")), "ident": ident, "name": full_name})
 
-    # 3. Sync upserted_leads collection (Hot unified leads)
+    return {
+        "total_evaluated": total_evaluated,
+        "total_synced_hot": len(synced_hot),
+        "total_skipped_cold": len(skipped_cold),
+        "total_skipped_invalid": len(skipped_invalid),
+        "total_failed": len(failed),
+        "synced_hot": synced_hot,
+        "skipped_cold": skipped_cold,
+        "skipped_invalid": skipped_invalid,
+        "failed": failed,
+    }
+
+
+def sync_all_hot_upserted_leads(sync_already_synced: bool = False) -> dict:
+    """Explicitly find all HOT unified upserted leads and sync them directly to Zoho CRM."""
+    if _is_zoho_in_cooldown():
+        return {"status": "cooldown", "message": "Zoho CRM 24h limit active; leads queued in Admin CRM."}
+
+    db = _get_mongo_db()
+    if db is None:
+        return {"error": "MongoDB connection not available"}
+
+    synced_hot = []
+    skipped_cold = []
+    skipped_invalid = []
+    failed = []
+    total_evaluated = 0
+
     upsert_col = os.getenv("UPSERT_COLLECTION_NAME", "upserted_leads")
     for u in db[upsert_col].find():
         total_evaluated += 1
@@ -971,7 +1226,26 @@ def sync_all_from_mongo(only_hot: bool | None = None, sync_already_synced: bool 
         }
         quality = evaluate_lead_quality(lead_data)
 
-        if not quality["is_valid"] or not quality["is_hot"]:
+        if not quality["is_valid"]:
+            skipped_invalid.append({
+                "type": "upsert_lead",
+                "id": str(u.get("id")),
+                "ident": ident,
+                "name": name,
+                "errors": quality["validation_errors"],
+            })
+            continue
+
+        if not quality["is_hot"]:
+            skipped_cold.append({
+                "type": "upsert_lead",
+                "id": str(u.get("id")),
+                "ident": ident,
+                "name": name,
+                "rating": quality["rating"],
+                "score": quality["score"],
+                "reasons": quality["reasons"],
+            })
             continue
 
         if not sync_already_synced and u.get("zoho_sync_status") == "synced" and u.get("zoho_lead_id"):
@@ -985,7 +1259,7 @@ def sync_all_from_mongo(only_hot: bool | None = None, sync_already_synced: bool 
             })
             continue
 
-        res = sync_zoho_lead(lead_data, only_hot=True)
+        res = sync_zoho_lead(lead_data, only_hot=True, force=sync_already_synced)
         if res:
             synced_hot.append({
                 "type": "upsert_lead",

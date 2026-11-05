@@ -63,22 +63,41 @@ def build_prefilled_calendly_url(base_url: str | None, answers: dict) -> str:
         answers.get("full_name")
         or f"{answers.get('first_name', '')} {answers.get('last_name', '')}".strip()
         or answers.get("first_name")
+        or answers.get("Name")
+        or answers.get("customer_name")
         or ""
-    )
-    email = answers.get("email") or ""
+    ).strip()
+    first_name = (answers.get("first_name") or (full_name.split()[0] if full_name else "")).strip()
+    last_name = (answers.get("last_name") or (" ".join(full_name.split()[1:]) if len(full_name.split()) > 1 else "")).strip()
+
+    email = (
+        answers.get("email")
+        or answers.get("Email")
+        or answers.get("customer_email")
+        or ""
+    ).strip()
+
     phone = (
         answers.get("mobile_number")
         or answers.get("contact_number")
         or answers.get("phone")
+        or answers.get("Phone")
+        or answers.get("PhoneNumber")
+        or answers.get("customer_phone")
         or ""
-    )
+    ).strip()
 
     params = {}
-    if full_name and full_name.lower() != "there":
+    if full_name and full_name.lower() not in {"there", "customer", "valued client"}:
         params["name"] = full_name
+    if first_name and first_name.lower() not in {"there", "customer"}:
+        params["first_name"] = first_name
+    if last_name:
+        params["last_name"] = last_name
     if email:
         params["email"] = email
     if phone:
+        params["phone"] = phone
         params["a1"] = phone
 
     if not params:
@@ -100,21 +119,54 @@ def format_completion_summary_message(
     spoke_to_person: bool = False,
     lang: str = "en",
 ) -> str:
-    """Standard unified WhatsApp conversation completion message in English, Hindi, or Hinglish."""
+    """Standard unified WhatsApp conversation completion message with full details and both Calendly options."""
     name = (
         first_name
-        or answers.get("full_name")
         or answers.get("first_name")
+        or (answers.get("full_name", "").split()[0] if answers.get("full_name") else "")
         or ""
     ).strip()
     if name.lower() in {"there", "customer"}:
         name = ""
 
-    raw_url = (
+    full_name_val = (
+        answers.get("full_name")
+        or f"{answers.get('first_name', '')} {answers.get('last_name', '')}".strip()
+        or name
+        or "Valued Client"
+    ).strip()
+    phone_val = (
+        answers.get("mobile_number")
+        or answers.get("contact_number")
+        or answers.get("phone")
+        or answers.get("Phone")
+        or answers.get("PhoneNumber")
+        or ""
+    ).strip()
+    email_val = (
+        answers.get("email")
+        or answers.get("Email")
+        or answers.get("customer_email")
+        or ""
+    ).strip()
+
+    raw_meeting_url = (
         schedule_url
         or os.getenv("CALENDLY_URL", "https://calendly.com/shailendra-profilent/30min")
     ).strip()
-    cal_url = build_prefilled_calendly_url(raw_url, answers)
+    raw_visit_url = os.getenv("CALENDLY_VISIT_URL", "https://calendly.com/rudrasinghdeo369/30min").strip()
+
+    ctx = {
+        **answers,
+        "full_name": full_name_val,
+        "first_name": name or answers.get("first_name", ""),
+        "email": email_val,
+        "phone": phone_val,
+        "mobile_number": phone_val,
+    }
+
+    meeting_url = build_prefilled_calendly_url(raw_meeting_url, ctx)
+    visit_url = build_prefilled_calendly_url(raw_visit_url, ctx)
 
     loc = answers.get("location_preference") or "Not specified"
     timeline = answers.get("planning_to_buy") or "Not specified"
@@ -132,54 +184,83 @@ def format_completion_summary_message(
     if not req or req.lower() in {"none", "skip", "n/a", "-", "null", "no"}:
         req = "None" if lang != "hi" else "कोई नहीं"
 
-    lines = []
     if lang == "hi":
-        greet = f"✅ धन्यवाद, {name}! मैंने आपकी सभी आवश्यकताएं नोट कर ली हैं:" if name else "✅ धन्यवाद! मैंने आपकी सभी आवश्यकताएं नोट कर ली हैं:"
+        greet = f"✅ धन्यवाद, {name}! आपकी सभी आवश्यकताएं और बातचीत का विवरण नोट कर लिया गया है:" if name else "✅ धन्यवाद! आपकी सभी आवश्यकताएं और बातचीत का विवरण नोट कर लिया गया है:"
         bullets = [
-            f"• लोकेशन: {loc}",
-            f"• कॉन्फ़िगरेशन: {bhk}",
-            f"• बजट: {budget}",
-            f"• समयसीमा: {timeline}",
-            f"• भुगतान विकल्प: {payment}",
-            f"• विशेष आवश्यकताएं: {req}",
+            f"• ग्राहक का नाम: {full_name_val}",
         ]
-        spoke_prefix = "हमारे सेल्स एग्जीक्यूटिव जल्द ही आपको कॉल करेंगे।\n\n" if spoke_to_person else ""
-        note = "हमारी प्रॉपर्टी स्पेशलिस्ट टीम आपकी प्राथमिकताओं की समीक्षा करेगी और चुनिंदा विकल्प साझा करेगी।"
+        if email_val:
+            bullets.append(f"• ईमेल (Email): {email_val}")
+        if phone_val:
+            bullets.append(f"• फ़ोन नंबर: {phone_val}")
+        bullets.extend([
+            f"• पसंदीदा क्षेत्र (Location): {loc}",
+            f"• प्रॉपर्टी कॉन्फ़िगरेशन (BHK): {bhk}",
+            f"• बजट रेंज (Budget): {budget}",
+            f"• ख़रीदने की समयसीमा (Timeline): {timeline}",
+            f"• भुगतान का तरीका (Payment): {payment}",
+            f"• विशेष आवश्यकताएं (Requirements): {req}",
+        ])
+        spoke_prefix = "हमारे सीनियर प्रॉपर्टी स्पेशलिस्ट जल्द ही आपसे संपर्क करेंगे।\n\n" if spoke_to_person else ""
+        note = "हमारी प्रॉपर्टी स्पेशलिस्ट टीम आपकी सभी प्राथमिकताओं की समीक्षा करेगी और आपके लिए सर्वोत्तम विकल्प तैयार करेगी।"
         cta = (
-            "🗓️ अपनी सुविधानुसार 1-on-1 परामर्श शेड्यूल करें:\n"
-            f"{cal_url}"
+            "🗓️ *आगे बढ़ने के लिए कृपया नीचे दिए गए विकल्पों में से चुनें:*\n\n"
+            "1️⃣ *परामर्श मीटिंग शेड्यूल करें (Schedule a Meeting):*\n"
+            f"👉 {meeting_url}\n\n"
+            "2️⃣ *प्रॉपर्टी साइट विज़िट शेड्यूल करें (Schedule a Visit):*\n"
+            f"👉 {visit_url}"
         )
     elif lang == "hinglish":
-        greet = f"✅ Dhanyawaad, {name}! Maine aapki saari requirements note kar li hain:" if name else "✅ Dhanyawaad! Maine aapki saari requirements note kar li hain:"
+        greet = f"✅ Dhanyawaad, {name}! Aapki conversation details aur requirements note kar li gayi hain:" if name else "✅ Dhanyawaad! Aapki conversation details aur requirements note kar li gayi hain:"
         bullets = [
-            f"• Location: {loc}",
-            f"• Configuration: {bhk}",
-            f"• Budget: {budget}",
-            f"• Timeline: {timeline}",
+            f"• Customer Name: {full_name_val}",
+        ]
+        if email_val:
+            bullets.append(f"• Email: {email_val}")
+        if phone_val:
+            bullets.append(f"• Phone Number: {phone_val}")
+        bullets.extend([
+            f"• Preferred Location: {loc}",
+            f"• Property Type (BHK): {bhk}",
+            f"• Budget Range: {budget}",
+            f"• Buying Timeline: {timeline}",
             f"• Payment Option: {payment}",
             f"• Special Requirements: {req}",
-        ]
-        spoke_prefix = "Hamare sales executive aapse jaldi hi call pe baat karenge.\n\n" if spoke_to_person else ""
-        note = "Hamari property specialist team aapki preferences review karke hand-picked options share karegi."
+        ])
+        spoke_prefix = "Hamare senior property specialist aapse jaldi hi contact karenge.\n\n" if spoke_to_person else ""
+        note = "Hamari property specialist team aapki requirements review karke best options ready karegi."
         cta = (
-            "🗓️ Apni suvidha ke anusaar 1-on-1 consultation schedule karein:\n"
-            f"{cal_url}"
+            "🗓️ *Aage proceed karne ke liye please neeche diye gaye options me se choose karein:*\n\n"
+            "1️⃣ *Schedule a Meeting:*\n"
+            f"👉 {meeting_url}\n\n"
+            "2️⃣ *Schedule a Visit:*\n"
+            f"👉 {visit_url}"
         )
     else:
-        greet = f"✅ Thank you, {name}! I've noted down all your requirements:" if name else "✅ Thank you! I've noted down all your requirements:"
+        greet = f"✅ Thank you, {name}! Here is the complete summary of your property enquiry:" if name else "✅ Thank you! Here is the complete summary of your property enquiry:"
         bullets = [
-            f"• Location: {loc}",
-            f"• Configuration: {bhk}",
-            f"• Budget: {budget}",
-            f"• Timeline: {timeline}",
+            f"• Customer Name: {full_name_val}",
+        ]
+        if email_val:
+            bullets.append(f"• Email: {email_val}")
+        if phone_val:
+            bullets.append(f"• Phone Number: {phone_val}")
+        bullets.extend([
+            f"• Location Preference: {loc}",
+            f"• Configuration / BHK: {bhk}",
+            f"• Budget Range: {budget}",
+            f"• Buying Timeline: {timeline}",
             f"• Payment Option: {payment}",
             f"• Special Requirements: {req}",
-        ]
-        spoke_prefix = "A sales executive will call you shortly.\n\n" if spoke_to_person else ""
-        note = "Our property specialist team will review your preferences and share hand-picked options."
+        ])
+        spoke_prefix = "A senior property specialist will contact you shortly.\n\n" if spoke_to_person else ""
+        note = "Our specialist team will review your requirements and prepare hand-picked options."
         cta = (
-            "🗓️ Schedule a 1-on-1 consultation at your convenience:\n"
-            f"{cal_url}"
+            "🗓️ *Please choose one of the options below to proceed:*\n\n"
+            "1️⃣ *Schedule a Meeting:*\n"
+            f"👉 {meeting_url}\n\n"
+            "2️⃣ *Schedule a Visit:*\n"
+            f"👉 {visit_url}"
         )
 
     bullet_block = "\n".join(bullets)
@@ -276,6 +357,27 @@ LISTS = {
             ("dev_flexible", "Flexible Payment Plan", "Flexible Payment Plan"),
         ],
     },
+    "q8_payment": {
+        "sid": os.getenv("TWILIO_LIST_PAYMENT_SID", ""),
+        "question": "How would you like to pay? Choose an option:",
+        "rows": [
+            ("pay_bank_emi", "Bank Finance (EMI)", "Bank Finance with EMI"),
+            ("pay_cash_full", "Full Cash Payment", "Full Cash Payment"),
+            ("pay_home_loan", "Home Loan (Mortgage)", "Home Loan (Mortgage)"),
+            ("pay_down_payment", "Down Payment Plan", "Down Payment Plan"),
+            ("pay_clp", "Construction-Linked (CLP)", "Construction-Linked Payment Plan (CLP)"),
+            ("pay_plp", "Possession-Linked (PLP)", "Possession-Linked Payment Plan (PLP)"),
+            ("pay_installment", "Installment Plan", "Installment Payment Plan"),
+            ("pay_developer_fin", "Developer Financing", "Developer Financing"),
+            ("pay_rent_to_own", "Rent-to-Own Scheme", "Rent-to-Own Scheme"),
+            ("pay_part_cash_loan", "Part Cash + Home Loan", "Part Cash + Home Loan"),
+            ("pay_balance_reg", "Balance at Registration", "Part Payment with Balance at Registration"),
+            ("pay_flexible", "Flexible Payment Plan", "Flexible Payment Plan"),
+            ("pay_subvention", "Subvention (Pre-EMI)", "Subvention Scheme (Developer Pays Pre-EMI)"),
+            ("pay_joint_loan", "Joint Home Loan", "Joint Home Loan (Co-applicant Financing)"),
+            ("pay_nri_plan", "NRI Payment Plan", "NRI Payment Plan (for Overseas Buyers)"),
+        ],
+    },
     "q9_bhk": {
         "sid": os.getenv("TWILIO_LIST_BHK_SID", ""),
         "question": "What type of home are you looking for?",
@@ -316,6 +418,55 @@ TEXT_PROMPTS = {
         "3. Almora\n"
         "4. Other (please type the area)"
     ),
+    "q6_planning": (
+        "When are you planning to buy?\n"
+        "1. Immediately\n"
+        "2. Within 1 Month\n"
+        "3. Within 3 Months\n"
+        "4. Within 6 Months\n"
+        "5. Within 12 Months\n"
+        "6. More Than 1 Year\n"
+        "7. Just Exploring / Researching"
+    ),
+    "q7_budget": (
+        "What is your budget range?\n"
+        "1. Up to 25 lakh\n"
+        "2. 25 lakh - 50 lakh\n"
+        "3. 50 lakh - 1 crore\n"
+        "4. 1 crore - 2 crore\n"
+        "5. Above 2 crore"
+    ),
+    "q8_payment": (
+        "How would you like to pay? Please choose your payment option:\n"
+        "1. Bank Finance with EMI\n"
+        "2. Full Cash Payment\n"
+        "3. Home Loan (Mortgage)\n"
+        "4. Down Payment Plan\n"
+        "5. Construction-Linked Payment Plan (CLP)\n"
+        "6. Possession-Linked Payment Plan (PLP)\n"
+        "7. Installment Payment Plan\n"
+        "8. Developer Financing\n"
+        "9. Rent-to-Own Scheme\n"
+        "10. Part Cash + Home Loan\n"
+        "11. Part Payment with Balance at Registration\n"
+        "12. Flexible Payment Plan\n"
+        "13. Subvention Scheme (Developer Pays Pre-EMI)\n"
+        "14. Joint Home Loan (Co-applicant Financing)\n"
+        "15. NRI Payment Plan (for Overseas Buyers)"
+    ),
+    "q9_bhk": (
+        "What type of home / configuration are you looking for?\n"
+        "1. 1 RK\n"
+        "2. 1 BHK\n"
+        "3. 2 BHK\n"
+        "4. 2.5 BHK\n"
+        "5. 3 BHK\n"
+        "6. 3.5 BHK\n"
+        "7. 4 BHK\n"
+        "8. 5 BHK+\n"
+        "9. Villa\n"
+        "10. Penthouse"
+    ),
     "q10_remarks": "Any *remarks or requirements* for your property search? (Type *skip* if none)",
 }
 
@@ -329,6 +480,7 @@ STAGE_PROMPT = {
     "q6_planning": "q6_planning",
     "q7_budget": "q7_budget",
     "q8_category": "q8_category",
+    "q8_payment": "q8_payment",
     "q8_loan": "q8_loan",
     "q8_cash": "q8_cash",
     "q8_developer": "q8_developer",
@@ -341,7 +493,12 @@ def twiml(message: str = "") -> Response:
     response = MessagingResponse()
     if message:
         response.message(message)
-    return Response(str(response), media_type="application/xml")
+    xml_bytes = str(response).encode("utf-8")
+    return Response(
+        content=xml_bytes,
+        media_type="text/xml",
+        headers={"Content-Type": "text/xml; charset=utf-8"},
+    )
 
 
 def _phone_suffix(phone: str) -> str:
@@ -405,14 +562,21 @@ def send_content(
         return message.sid
     except Exception as exc:
         err_code = getattr(exc, "code", None)
-        logger.warning(
-            "WhatsApp template not sent (purpose=%s, content_sid=%s, twilio_error_code=%s, phone_suffix=%s): %s",
-            purpose,
-            content_sid,
-            err_code,
-            _phone_suffix(recipient_phone),
-            str(exc).splitlines()[0] if str(exc) else "Template error",
-        )
+        if err_code in (572002, 21608):
+            logger.info(
+                "WhatsApp template outbound push skipped for %s (Twilio Trial restriction, err_code=%s). Waiting for customer inbound.",
+                _phone_suffix(recipient_phone),
+                err_code,
+            )
+        else:
+            logger.warning(
+                "WhatsApp template not sent (purpose=%s, content_sid=%s, twilio_error_code=%s, phone_suffix=%s): %s",
+                purpose,
+                content_sid,
+                err_code,
+                _phone_suffix(recipient_phone),
+                str(exc).splitlines()[0] if str(exc) else "Template error",
+            )
         return None
 
 
@@ -540,33 +704,85 @@ async def start_questionnaire(
         "email": email,
         "mobile_number": phone,
     }
-    await conversations.update_one(
-        {"phone": phone},
-        {
-            "$set": {
-                "phone": phone,
-                "contact_id": contact_id,
-                "stage": "q_ai_flow",
-                "answers": answers,
-                "form_requirement": requirement.strip(),
-                "requirement_messages": [requirement.strip()] if requirement.strip() else [],
-                "status": "awaiting_location",
-                "messages": [],
-                "updated_at": datetime.now(timezone.utc),
+    now_utc = datetime.now(timezone.utc)
+
+    # 1. Match by specific contact submission if provided
+    target_conv = None
+    if contact_id:
+        target_conv = await conversations.find_one({"contact_id": contact_id})
+
+    # 2. If not matched by contact_id, check for an active in-progress conversation for this phone
+    if not target_conv:
+        active_c = await conversations.find_one(
+            {"phone": phone, "status": {"$in": ["in_progress", "awaiting_location", "awaiting_customer_start"]}},
+            sort=[("updated_at", -1)],
+        )
+        if active_c:
+            a_ans = active_c.get("answers") or {}
+            a_email = (active_c.get("email") or a_ans.get("email") or "").strip().lower()
+            a_name = (active_c.get("full_name") or a_ans.get("full_name") or "").strip().lower()
+            c_email = email.strip().lower()
+            c_name = full_name.strip().lower()
+            # If same customer, continue on same conversation
+            if (c_email and a_email and c_email == a_email) or (c_name and a_name and c_name == a_name):
+                target_conv = active_c
+
+    # 3. If target conversation exists, update it by _id.
+    # Otherwise, insert a BRAND NEW conversation document so each user gets their own separate row!
+    if target_conv:
+        conv_id = target_conv["_id"]
+        await conversations.update_one(
+            {"_id": conv_id},
+            {
+                "$set": {
+                    "phone": phone,
+                    "contact_id": contact_id,
+                    "first_name": answers["first_name"],
+                    "last_name": answers["last_name"],
+                    "full_name": full_name,
+                    "email": email,
+                    "stage": "q_ai_flow",
+                    "answers": answers,
+                    "form_requirement": requirement.strip(),
+                    "requirement_messages": [requirement.strip()] if requirement.strip() else [],
+                    "status": "awaiting_location",
+                    "updated_at": now_utc,
+                },
+                "$unset": {
+                    "completed_at": "",
+                    "property_lead_id": "",
+                    "schedule_url": "",
+                },
             },
-            "$unset": {
-                "completed_at": "",
-                "property_lead_id": "",
-                "schedule_url": "",
-            },
-        },
-        upsert=True,
-    )
+        )
+    else:
+        new_doc = {
+            "phone": phone,
+            "contact_id": contact_id,
+            "first_name": answers["first_name"],
+            "last_name": answers["last_name"],
+            "full_name": full_name,
+            "email": email,
+            "stage": "q_ai_flow",
+            "answers": answers,
+            "form_requirement": requirement.strip(),
+            "requirement_messages": [requirement.strip()] if requirement.strip() else [],
+            "status": "awaiting_location",
+            "created_at": now_utc,
+            "updated_at": now_utc,
+            "messages": [],
+        }
+        res = await conversations.insert_one(new_doc)
+        conv_id = res.inserted_id
+
     sender_digits = re.sub(r"\D", "", TWILIO_WHATSAPP_FROM)
     is_sandbox = sender_digits == "14155238886"
 
     message_sid = None
-    if START_TEMPLATE_SID and not is_sandbox:
+    sent_body = ""
+    # In Sandbox mode (+14155238886), outbound server pushes are disallowed by Twilio.
+    # The customer opens the pre-filled WhatsApp link and sends 'Hi' to start the session.
+    if not is_sandbox and START_TEMPLATE_SID:
         try:
             message_sid = await run_in_threadpool(
                 send_content,
@@ -575,35 +791,47 @@ async def start_questionnaire(
                 start_template_variables(full_name, email, phone),
                 purpose="questionnaire_start",
             )
+            sent_body = "Sent WhatsApp Template Greeting"
         except Exception as e:
             logger.warning("WhatsApp send_content error for %s: %s", phone, e)
 
-    if not message_sid:
+    if not is_sandbox and not message_sid:
         try:
             fallback_body = start_message_text(full_name, email=email, requirement=requirement)
             message_sid = await run_in_threadpool(send_text, phone, fallback_body)
+            sent_body = fallback_body
         except Exception as e:
             logger.warning("WhatsApp send_text error for %s: %s", phone, e)
 
     if message_sid:
+        now_utc = datetime.now(timezone.utc)
         await conversations.update_one(
-            {"phone": phone},
-            {"$set": {
-                "status": "awaiting_location",
-                "start_message_sid": message_sid,
-                "updated_at": datetime.now(timezone.utc),
-            }},
+            {"_id": conv_id},
+            {
+                "$set": {
+                    "status": "awaiting_location",
+                    "start_message_sid": message_sid,
+                    "updated_at": now_utc,
+                },
+                "$push": {
+                    "messages": {
+                        "role": "assistant",
+                        "content": sent_body,
+                        "timestamp": now_utc.isoformat(),
+                    }
+                },
+            },
         )
         return {"started": True, "status": "accepted", "message_sid": message_sid}
     else:
         await conversations.update_one(
-            {"phone": phone},
+            {"_id": conv_id},
             {"$set": {
                 "status": "awaiting_customer_start",
                 "updated_at": datetime.now(timezone.utc),
             }},
         )
-        return {"started": False, "status": "awaiting_customer_start"}
+        return {"started": True, "sandbox": is_sandbox, "status": "awaiting_customer_start"}
 
 
 def menu_fallback(stage: str) -> str:

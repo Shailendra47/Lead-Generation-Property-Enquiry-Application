@@ -1357,7 +1357,7 @@ html.contact-document::-webkit-scrollbar {
   border-radius: 8px;
   font-size: 14px;
   padding: 0 12px;
-  background-color: #EEF1F0 !important;
+  background-color: #EEF1F0;
   color: #1f2937;
   font-weight: 500;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
@@ -1371,7 +1371,7 @@ html.contact-document::-webkit-scrollbar {
   border-radius: 8px;
   font-size: 14px;
   padding: 8px 12px;
-  background-color: #EEF1F0 !important;
+  background-color: #EEF1F0;
   color: #1f2937;
   font-weight: 500;
   resize: vertical;
@@ -1387,10 +1387,10 @@ html.contact-document::-webkit-scrollbar {
 .contact_us_green input:focus,
 .contact_us_green textarea:focus,
 .contact_us_green select:focus {
-  outline: none !important;
-  background-color: #ffffff !important;
-  border-color: #2A9DAE !important;
-  box-shadow: 0 0 0 3.5px rgba(42, 157, 174, 0.18) !important;
+  outline: none;
+  background-color: #ffffff;
+  border-color: #2A9DAE;
+  box-shadow: 0 0 0 3.5px rgba(42, 157, 174, 0.18);
 }
 
 /* 2:10 Aspect Ratio Phone Group with #EEF1F0 */
@@ -1408,10 +1408,10 @@ html.contact-document::-webkit-scrollbar {
   width: calc(2 / 12 * 100%) !important;
   min-width: 82px !important;
   height: 40px !important;
-  border: 1.5px solid #EEF1F0 !important;
-  border-right: 1px solid #dbe2e0 !important;
-  border-radius: 8px 0 0 8px !important;
-  background-color: #EEF1F0 !important;
+  border: 1.5px solid #EEF1F0;
+  border-right: 1px solid #dbe2e0;
+  border-radius: 8px 0 0 8px;
+  background-color: #EEF1F0;
   padding: 0 6px 0 10px !important;
   font-size: 13.5px;
   font-weight: 500;
@@ -1424,10 +1424,10 @@ html.contact-document::-webkit-scrollbar {
   flex: 10 1 calc(10 / 12 * 100%) !important;
   width: calc(10 / 12 * 100%) !important;
   height: 40px !important;
-  border: 1.5px solid #EEF1F0 !important;
-  border-left: none !important;
-  border-radius: 0 8px 8px 0 !important;
-  background-color: #EEF1F0 !important;
+  border: 1.5px solid #EEF1F0;
+  border-left: none;
+  border-radius: 0 8px 8px 0;
+  background-color: #EEF1F0;
 }
 
 .contact_us_green .phone-input-group:focus-within {
@@ -1438,18 +1438,18 @@ html.contact-document::-webkit-scrollbar {
 .contact_us_green .country-picker-btn {
   height: 40px !important;
   min-height: 40px !important;
-  border: 1.5px solid #EEF1F0 !important;
-  border-right: 1px solid #dbe2e0 !important;
-  border-radius: 8px 0 0 8px !important;
-  background-color: #EEF1F0 !important;
+  border: 1.5px solid #EEF1F0;
+  border-right: 1px solid #dbe2e0;
+  border-radius: 8px 0 0 8px;
+  background-color: #EEF1F0;
   padding: 0 8px 0 10px !important;
 }
 
 .contact_us_green .phone-input-group:focus-within .country-picker-btn,
 .contact_us_green .phone-input-group:focus-within .country-code-select,
 .contact_us_green .phone-input-group:focus-within .input {
-  background-color: #ffffff !important;
-  border-color: #2A9DAE !important;
+  background-color: #ffffff;
+  border-color: #2A9DAE;
 }
 
 /* WhatsApp Opt-in Checkbox */
@@ -2118,6 +2118,7 @@ html.contact-document::-webkit-scrollbar {
 }
 
 
+
 /* ========================================================
    Enquiry Form Split Layout (Personal Left | Property Right)
    ======================================================== */
@@ -2191,8 +2192,8 @@ html.contact-document::-webkit-scrollbar {
 .contact_us_green select.input,
 .contact_us_green .form-select.input {
   height: 40px;
-  background-color: #EEF1F0 !important;
-  border: 1.5px solid #EEF1F0 !important;
+  background-color: #EEF1F0;
+  border: 1.5px solid #EEF1F0;
   border-radius: 8px;
   color: #1f2937;
   font-weight: 500;
@@ -2208,9 +2209,9 @@ html.contact-document::-webkit-scrollbar {
 
 .contact_us_green select.input:focus,
 .contact_us_green .form-select.input:focus {
-  background-color: #ffffff !important;
-  border-color: #2A9DAE !important;
-  box-shadow: 0 0 0 3.5px rgba(42, 157, 174, 0.18) !important;
+  background-color: #ffffff;
+  border-color: #2A9DAE;
+  box-shadow: 0 0 0 3.5px rgba(42, 157, 174, 0.18);
 }
 
 .enquiry-trust-badge {
@@ -2305,3 +2306,827 @@ html.contact-document::-webkit-scrollbar {
     padding-left: 0 !important;
   }
 }
+
+/* ==========================================================================
+   DAY (LIGHT) / NIGHT (DARK) TOGGLE SWITCH COMPONENT
+   Matches Day (Sun & Clouds) / Night (Moon with Craters & Stars) Visual Design
+   ========================================================================== */
+.day-night-toggle {
+  position: relative;
+  width: 74px;
+  height: 36px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  outline: none;
+  border-radius: 999px;
+  flex-shrink: 0;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+}
+
+.day-night-toggle:hover {
+  transform: scale(1.05);
+}
+
+.day-night-toggle:active {
+  transform: scale(0.96);
+}
+
+.day-night-toggle:focus-visible {
+  box-shadow: 0 0 0 3px rgba(42, 157, 174, 0.45);
+}
+
+.toggle-track {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: 999px;
+  background: #25a4d6; /* Vivid Day Sky Blue */
+  overflow: hidden;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.16), 0 2px 6px rgba(0, 0, 0, 0.08);
+  transition: background-color 0.45s cubic-bezier(0.4, 0, 0.2, 1);
+  display: block;
+}
+
+/* Day Scene: Fluffy White Clouds on the Right */
+.scene-day {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  pointer-events: none;
+  transition: opacity 0.35s ease, transform 0.45s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.scene-day .cloud {
+  position: absolute;
+  opacity: 0.96;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.06));
+  transition: transform 0.45s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
+}
+
+.scene-day .cloud-top {
+  width: 23px;
+  height: 13px;
+  top: 5px;
+  right: 9px;
+}
+
+.scene-day .cloud-bottom {
+  width: 25px;
+  height: 14px;
+  bottom: 5px;
+  right: 17px;
+}
+
+/* Night Scene: Sparkling Stars on the Left */
+.scene-night {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateX(-10px);
+  transition: opacity 0.35s ease, transform 0.45s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.scene-night .star {
+  position: absolute;
+  transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.scene-night .star-main {
+  width: 13px;
+  height: 13px;
+  top: 13px;
+  left: 9px;
+  animation: starTwinkle 3s infinite ease-in-out;
+}
+
+.scene-night .star-top {
+  width: 7px;
+  height: 7px;
+  top: 7px;
+  left: 17px;
+  animation: starTwinkle 2.5s infinite ease-in-out 0.8s;
+}
+
+.scene-night .star-bottom {
+  width: 8px;
+  height: 8px;
+  bottom: 6px;
+  left: 23px;
+  animation: starTwinkle 2.8s infinite ease-in-out 1.4s;
+}
+
+@keyframes starTwinkle {
+  0%, 100% { opacity: 0.95; transform: scale(1); }
+  50% { opacity: 0.45; transform: scale(0.75); }
+}
+
+/* Celestial Orb: Sun in Day, Moon in Night */
+.celestial-orb {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #ffbc00; /* Warm Golden Sun */
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.22), inset -1px -1px 2px rgba(0, 0, 0, 0.1);
+  transition: transform 0.45s cubic-bezier(0.68, -0.2, 0.265, 1.25),
+              background-color 0.45s ease,
+              box-shadow 0.45s ease;
+  z-index: 2;
+}
+
+/* Moon Craters */
+.celestial-orb .crater {
+  position: absolute;
+  border-radius: 50%;
+  background: #9ab4c4; /* Realistic Crater Gray-Blue */
+  opacity: 0;
+  transform: scale(0.3);
+  transition: opacity 0.35s ease, transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.celestial-orb .crater-large {
+  width: 10px;
+  height: 10px;
+  top: 6px;
+  left: 4px;
+}
+
+.celestial-orb .crater-medium {
+  width: 5px;
+  height: 5px;
+  bottom: 5px;
+  right: 6px;
+}
+
+.celestial-orb .crater-small {
+  width: 3.5px;
+  height: 3.5px;
+  top: 8px;
+  right: 5px;
+}
+
+/* ==========================================================================
+   Active Night (Dark) State of Toggle
+   ========================================================================== */
+.dark-theme .toggle-track,
+[data-theme="dark"] .toggle-track {
+  background: #212733; /* Midnight Charcoal Navy */
+  box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.35), 0 2px 6px rgba(0, 0, 0, 0.2);
+}
+
+.dark-theme .scene-day,
+[data-theme="dark"] .scene-day {
+  opacity: 0;
+  transform: translateX(10px) scale(0.75);
+}
+
+.dark-theme .scene-night,
+[data-theme="dark"] .scene-night {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.dark-theme .celestial-orb,
+[data-theme="dark"] .celestial-orb {
+  transform: translateX(38px);
+  background: #cddbe5; /* Pale Lunar Silver-Blue */
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45), inset -1px -1px 3px rgba(110, 130, 150, 0.35);
+}
+
+.dark-theme .celestial-orb .crater,
+[data-theme="dark"] .celestial-orb .crater {
+  opacity: 1;
+  transform: scale(1);
+}
+
+@media (max-width: 575.98px) {
+  .day-night-toggle {
+    width: 62px;
+    height: 32px;
+  }
+  .toggle-track .celestial-orb {
+    width: 24px;
+    height: 24px;
+    top: 4px;
+    left: 4px;
+  }
+  .toggle-track .scene-day .cloud-top { width: 18px; height: 11px; top: 4px; right: 7px; }
+  .toggle-track .scene-day .cloud-bottom { width: 20px; height: 12px; bottom: 4px; right: 14px; }
+  .dark-theme .celestial-orb,
+  [data-theme="dark"] .celestial-orb {
+    transform: translateX(30px);
+  }
+}
+
+/* ==========================================================================
+   NIGHT (DARK) THEME — EYE STRAIN REDUCTION STYLES
+   Comfortable contrast, reduced glare, elegant dark slate aesthetics
+   ========================================================================== */
+html.dark-theme,
+body.dark-theme,
+[data-theme="dark"] {
+  background-color: #0b1120 !important;
+  color: #f1f5f9 !important;
+  color-scheme: dark;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Smooth theme transition for major containers */
+body,
+.contact-navbar,
+.contact_us_green_wrap,
+.contact_us_green,
+.form-box,
+.input,
+.textinput,
+.form-select,
+.country-picker-btn,
+.country-dropdown-menu,
+.enquiry-trust-badge,
+.loc-list {
+  transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease, box-shadow 0.3s ease;
+}
+
+/* Navbar */
+.dark-theme .contact-navbar {
+  background: #111827 !important;
+  border-bottom: 1px solid #1f2937 !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35) !important;
+}
+
+.dark-theme .contact-brand-img,
+.dark-theme .brand-logo,
+[data-theme="dark"] .contact-brand-img,
+[data-theme="dark"] .brand-logo {
+  content: url("/image/profilent-logo-dark.png?v=20261029-dark-logo2");
+  filter: none !important;
+}
+
+.dark-theme .nav-enquiry-btn {
+  background: #1e293b !important;
+  border-color: #334155 !important;
+  color: #38bdf8 !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3) !important;
+}
+
+.dark-theme .nav-enquiry-btn:hover {
+  background: #2A9DAE !important;
+  border-color: #238594 !important;
+  color: #ffffff !important;
+  box-shadow: 0 4px 14px rgba(42, 157, 174, 0.4) !important;
+}
+
+.dark-theme .nav-enquiry-btn .nav-btn-icon,
+.dark-theme .nav-enquiry-btn .nav-btn-arrow {
+  stroke: #38bdf8;
+}
+
+.dark-theme .nav-enquiry-btn:hover .nav-btn-icon,
+.dark-theme .nav-enquiry-btn:hover .nav-btn-arrow {
+  stroke: #ffffff;
+}
+
+/* Page Wrappers */
+.dark-theme .contact_us_green_wrap,
+.dark-theme .contact_us_green {
+  background: #0b1120 !important;
+}
+
+/* Main Form Card & Surrounding Container */
+.dark-theme .big-container,
+.dark-theme .contact_us_green .big-container,
+.dark-theme .enquiry_card_container .big-container,
+.dark-theme .form-card,
+[data-theme="dark"] .big-container,
+[data-theme="dark"] .contact_us_green .big-container,
+[data-theme="dark"] .enquiry_card_container .big-container,
+[data-theme="dark"] .form-card {
+  background: #131d2e !important;
+  border: 1px solid #1e293b !important;
+  box-shadow: 0 20px 50px -10px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.04) !important;
+}
+
+/* Inner form element inside .big-container */
+.dark-theme .form-box,
+[data-theme="dark"] .form-box {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+/* Divider line between left form and right info */
+.dark-theme .line,
+[data-theme="dark"] .line {
+  border-right-color: #1e293b !important;
+  border-bottom-color: #1e293b !important;
+}
+
+/* Headings and Subheadings */
+.dark-theme .contactus-head,
+.dark-theme .form-title,
+.dark-theme .enquiry-col-title,
+[data-theme="dark"] .contactus-head,
+[data-theme="dark"] .form-title,
+[data-theme="dark"] .enquiry-col-title {
+  color: #f8fafc !important;
+}
+
+.dark-theme .contactus-subhead,
+.dark-theme .enquiry-col-desc,
+.dark-theme .input-title,
+[data-theme="dark"] .contactus-subhead,
+[data-theme="dark"] .enquiry-col-desc,
+[data-theme="dark"] .input-title {
+  color: #94a3b8 !important;
+}
+
+.dark-theme .input-title,
+[data-theme="dark"] .input-title {
+  color: #cbd5e1 !important;
+  font-weight: 600;
+}
+
+.dark-theme .input-title .text-danger,
+[data-theme="dark"] .input-title .text-danger {
+  color: #f87171 !important;
+}
+
+.dark-theme .input-title .text-muted,
+[data-theme="dark"] .input-title .text-muted {
+  color: #64748b !important;
+}
+
+/* Form Inputs, Textarea, and Selects in Dark Mode */
+.dark-theme .input,
+.dark-theme .textinput,
+.dark-theme .form-control,
+.dark-theme .contact_us_green .input,
+.dark-theme .contact_us_green .textinput,
+.dark-theme .contact_us_green .form-control,
+[data-theme="dark"] .input,
+[data-theme="dark"] .textinput,
+[data-theme="dark"] .form-control,
+[data-theme="dark"] .contact_us_green .input,
+[data-theme="dark"] .contact_us_green .textinput,
+[data-theme="dark"] .contact_us_green .form-control {
+  background-color: #0d1524 !important;
+  color: #ffffff !important;
+  border: 1.5px solid #334155 !important;
+  border-radius: 8px !important;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.45) !important;
+}
+
+.dark-theme .contact_us_green select.input,
+.dark-theme .contact_us_green .form-select.input,
+.dark-theme .contact_us_green select,
+.dark-theme .contact_us_green .form-select,
+.dark-theme select.input,
+.dark-theme .form-select.input,
+.dark-theme select,
+.dark-theme .form-select,
+[data-theme="dark"] .contact_us_green select.input,
+[data-theme="dark"] .contact_us_green .form-select.input,
+[data-theme="dark"] .contact_us_green select,
+[data-theme="dark"] .contact_us_green .form-select,
+[data-theme="dark"] select.input,
+[data-theme="dark"] .form-select.input,
+[data-theme="dark"] select,
+[data-theme="dark"] .form-select {
+  background-color: #0d1524 !important;
+  color: #f8fafc !important;
+  border: 1.5px solid #334155 !important;
+  border-radius: 8px !important;
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%2338bdf8' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m2 5 6 6 6-6'/%3e%3c/svg%3e") !important;
+  background-repeat: no-repeat !important;
+  background-position: right 12px center !important;
+  background-size: 13px 9px !important;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.45) !important;
+}
+
+.dark-theme select option,
+.dark-theme .form-select option,
+.dark-theme select.input option,
+.dark-theme .form-select.input option,
+[data-theme="dark"] select option,
+[data-theme="dark"] .form-select option,
+[data-theme="dark"] select.input option,
+[data-theme="dark"] .form-select.input option {
+  background-color: #0f172a !important;
+  color: #f8fafc !important;
+}
+
+.dark-theme .input::placeholder,
+.dark-theme .textinput::placeholder,
+.dark-theme .form-control::placeholder,
+.dark-theme .contact_us_green .input::placeholder,
+.dark-theme .contact_us_green .textinput::placeholder,
+[data-theme="dark"] .input::placeholder,
+[data-theme="dark"] .textinput::placeholder,
+[data-theme="dark"] .form-control::placeholder,
+[data-theme="dark"] .contact_us_green .input::placeholder,
+[data-theme="dark"] .contact_us_green .textinput::placeholder {
+  color: #94a3b8 !important;
+  opacity: 1 !important;
+}
+
+.dark-theme .input:hover,
+.dark-theme .textinput:hover,
+.dark-theme .form-select:hover,
+.dark-theme .contact_us_green .input:hover,
+.dark-theme .contact_us_green .textinput:hover,
+.dark-theme .contact_us_green select.input:hover,
+.dark-theme .contact_us_green .form-select.input:hover,
+[data-theme="dark"] .input:hover,
+[data-theme="dark"] .textinput:hover,
+[data-theme="dark"] .form-select:hover,
+[data-theme="dark"] .contact_us_green .input:hover,
+[data-theme="dark"] .contact_us_green .textinput:hover,
+[data-theme="dark"] .contact_us_green select.input:hover,
+[data-theme="dark"] .contact_us_green .form-select.input:hover {
+  border-color: #475569 !important;
+}
+
+.dark-theme .input:focus,
+.dark-theme .textinput:focus,
+.dark-theme .form-select:focus,
+.dark-theme .form-control:focus,
+.dark-theme .contact_us_green .input:focus,
+.dark-theme .contact_us_green .textinput:focus,
+.dark-theme .contact_us_green select.input:focus,
+.dark-theme .contact_us_green .form-select.input:focus,
+[data-theme="dark"] .input:focus,
+[data-theme="dark"] .textinput:focus,
+[data-theme="dark"] .form-select:focus,
+[data-theme="dark"] .form-control:focus,
+[data-theme="dark"] .contact_us_green .input:focus,
+[data-theme="dark"] .contact_us_green .textinput:focus,
+[data-theme="dark"] .contact_us_green select.input:focus,
+[data-theme="dark"] .contact_us_green .form-select.input:focus {
+  background-color: #0f1828 !important;
+  border-color: #2A9DAE !important;
+  box-shadow: 0 0 0 3px rgba(42, 157, 174, 0.3) !important;
+  color: #ffffff !important;
+}
+
+/* Custom Country Phone Picker & Phone Input Group in Dark Mode */
+.dark-theme .phone-input-group,
+.dark-theme .contact_us_green .phone-input-group,
+[data-theme="dark"] .phone-input-group,
+[data-theme="dark"] .contact_us_green .phone-input-group {
+  background-color: #0d1524 !important;
+  border: 1.5px solid #334155 !important;
+  border-radius: 8px !important;
+}
+
+.dark-theme .phone-input-group:hover,
+.dark-theme .contact_us_green .phone-input-group:hover,
+[data-theme="dark"] .phone-input-group:hover,
+[data-theme="dark"] .contact_us_green .phone-input-group:hover {
+  border-color: #475569 !important;
+}
+
+.dark-theme .phone-input-group .custom-country-picker .country-picker-btn,
+.dark-theme .contact_us_green .phone-input-group .country-picker-btn,
+[data-theme="dark"] .phone-input-group .custom-country-picker .country-picker-btn,
+[data-theme="dark"] .contact_us_green .phone-input-group .country-picker-btn {
+  background-color: #0d1524 !important;
+  border: none !important;
+  border-right: 1.5px solid #334155 !important;
+  border-radius: 8px 0 0 8px !important;
+  color: #f8fafc !important;
+}
+
+.dark-theme .phone-input-group input.input,
+.dark-theme .phone-input-group input.form-control,
+.dark-theme .phone-input-group input.phone-number-input,
+.dark-theme .contact_us_green .phone-input-group input,
+.dark-theme #imgis-5,
+.dark-theme #mobile_number,
+[data-theme="dark"] .phone-input-group input.input,
+[data-theme="dark"] .phone-input-group input.form-control,
+[data-theme="dark"] .phone-input-group input.phone-number-input,
+[data-theme="dark"] .contact_us_green .phone-input-group input,
+[data-theme="dark"] #imgis-5,
+[data-theme="dark"] #mobile_number {
+  background-color: #0d1524 !important;
+  color: #ffffff !important;
+  border: none !important;
+  border-radius: 0 8px 8px 0 !important;
+  box-shadow: none !important;
+}
+
+.dark-theme .phone-input-group:focus-within,
+.dark-theme .contact_us_green .phone-input-group:focus-within,
+[data-theme="dark"] .phone-input-group:focus-within,
+[data-theme="dark"] .contact_us_green .phone-input-group:focus-within {
+  box-shadow: 0 0 0 3.5px rgba(42, 157, 174, 0.3) !important;
+  border-color: #2A9DAE !important;
+}
+
+.dark-theme .custom-country-picker .country-picker-btn,
+[data-theme="dark"] .custom-country-picker .country-picker-btn {
+  background-color: #0d1524 !important;
+  border-color: #243247 !important;
+  color: #f8fafc !important;
+}
+
+.dark-theme .custom-country-picker .country-picker-btn:hover,
+[data-theme="dark"] .custom-country-picker .country-picker-btn:hover {
+  background-color: #131d2e !important;
+  border-color: #334155 !important;
+}
+
+.dark-theme .custom-country-picker .country-dial-code,
+[data-theme="dark"] .custom-country-picker .country-dial-code {
+  color: #cbd5e1 !important;
+}
+
+.dark-theme .custom-country-picker .dropdown-chevron path,
+[data-theme="dark"] .custom-country-picker .dropdown-chevron path {
+  stroke: #94a3b8 !important;
+}
+
+.dark-theme .country-dropdown-menu,
+[data-theme="dark"] .country-dropdown-menu {
+  background: #131d2e !important;
+  border: 1px solid #243247 !important;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.65) !important;
+}
+
+.dark-theme .country-search-wrap,
+[data-theme="dark"] .country-search-wrap {
+  background: #131d2e !important;
+  border-bottom: 1px solid #1e293b !important;
+}
+
+.dark-theme .country-search-input,
+[data-theme="dark"] .country-search-input {
+  background: #0d1524 !important;
+  border-color: #243247 !important;
+  color: #f8fafc !important;
+}
+
+.dark-theme .country-search-input::placeholder,
+[data-theme="dark"] .country-search-input::placeholder {
+  color: #64748b !important;
+}
+
+.dark-theme .country-item,
+[data-theme="dark"] .country-item {
+  color: #e2e8f0 !important;
+}
+
+.dark-theme .country-item:hover,
+.dark-theme .country-item.active,
+[data-theme="dark"] .country-item:hover,
+[data-theme="dark"] .country-item.active {
+  background: #1e293b !important;
+}
+
+.dark-theme .country-name,
+[data-theme="dark"] .country-name {
+  color: #e2e8f0 !important;
+}
+
+.dark-theme .country-code,
+[data-theme="dark"] .country-code {
+  color: #94a3b8 !important;
+}
+
+/* Right Column Contact Information & Social Icons */
+.dark-theme #i7ac-2,
+[data-theme="dark"] #i7ac-2 {
+  color: #f8fafc !important;
+}
+
+.dark-theme #i7ac-2 .contactus-head,
+[data-theme="dark"] #i7ac-2 .contactus-head {
+  color: #f8fafc !important;
+}
+
+.dark-theme #i7ac-2 .contactus-subhead,
+[data-theme="dark"] #i7ac-2 .contactus-subhead,
+.dark-theme .contact-text,
+[data-theme="dark"] .contact-text {
+  color: #94a3b8 !important;
+}
+
+.dark-theme .contact-box,
+[data-theme="dark"] .contact-box {
+  color: #cbd5e1 !important;
+}
+
+.dark-theme .contact-icon-badge,
+[data-theme="dark"] .contact-icon-badge {
+  background-color: #0d1524 !important;
+  color: #38bdf8 !important;
+  border: 1px solid #1e293b !important;
+}
+
+.dark-theme .contact-icon-badge svg,
+[data-theme="dark"] .contact-icon-badge svg {
+  fill: #38bdf8 !important;
+}
+
+.dark-theme .social-btn,
+[data-theme="dark"] .social-btn {
+  background: #0d1524 !important;
+  color: #94a3b8 !important;
+  border: 1px solid #1e293b !important;
+}
+
+.dark-theme .social-btn:hover,
+[data-theme="dark"] .social-btn:hover {
+  background: #2A9DAE !important;
+  border-color: #238594 !important;
+  color: #ffffff !important;
+}
+
+.dark-theme .social-icon,
+[data-theme="dark"] .social-icon {
+  fill: #94a3b8 !important;
+}
+
+.dark-theme .social-btn:hover .social-icon,
+[data-theme="dark"] .social-btn:hover .social-icon {
+  fill: #ffffff !important;
+}
+  color: #f8fafc !important;
+}
+
+.dark-theme .country-search-input::placeholder {
+  color: #64748b !important;
+}
+
+.dark-theme .country-item {
+  color: #e2e8f0 !important;
+}
+
+.dark-theme .country-item:hover,
+.dark-theme .country-item.active {
+  background: #1e293b !important;
+}
+
+.dark-theme .country-name {
+  color: #e2e8f0 !important;
+}
+
+.dark-theme .country-code {
+  color: #94a3b8 !important;
+}
+
+/* Checkbox Section */
+.dark-theme .checkbox-text {
+  color: #cbd5e1 !important;
+}
+
+.dark-theme .checkbox-container input[type="checkbox"] {
+  border-color: #334155 !important;
+  background-color: #0d1524 !important;
+}
+
+.dark-theme .checkbox-container input[type="checkbox"]:checked {
+  background-color: #2A9DAE !important;
+  border-color: #2A9DAE !important;
+}
+
+/* Trust Badge in Enquiry Form */
+.dark-theme .enquiry-trust-badge {
+  background: #0d1a29 !important;
+  border: 1px solid #1e3a5f !important;
+  color: #94a3b8 !important;
+}
+
+.dark-theme .trust-icon {
+  fill: #38bdf8 !important;
+}
+
+/* Location Autocomplete Dropdown in Dark Mode */
+.dark-theme .loc-list {
+  background: #131d2e !important;
+  border: 1px solid #243247 !important;
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.6) !important;
+}
+
+.dark-theme .loc-list li {
+  color: #e2e8f0 !important;
+  border-bottom: 1px solid #1e293b !important;
+}
+
+.dark-theme .loc-list li:hover {
+  background: #1e293b !important;
+  color: #38bdf8 !important;
+}
+
+.dark-theme .loc-list li.muted {
+  color: #64748b !important;
+}
+
+/* Column Divider in Enquiry Form */
+@media (min-width: 1025px) {
+  .dark-theme .enquiry-left-col {
+    border-right: 1.5px solid #1e293b !important;
+  }
+}
+@media (max-width: 1024px) {
+  .dark-theme .enquiry-left-col {
+    border-bottom: 1.5px solid #1e293b !important;
+  }
+}
+
+/* Submit Button & Glow */
+.dark-theme .submit-btn {
+  background: #2A9DAE !important;
+  color: #ffffff !important;
+  box-shadow: 0 4px 18px rgba(42, 157, 174, 0.45) !important;
+}
+
+.dark-theme .submit-btn:hover {
+  background: #228493 !important;
+  box-shadow: 0 6px 24px rgba(42, 157, 174, 0.6) !important;
+}
+
+/* Popups / Alerts in Dark Mode */
+.dark-theme .popup-overlay {
+  background: rgba(0, 0, 0, 0.75) !important;
+}
+
+.dark-theme .popup-box,
+.dark-theme .alert-dialog {
+  background: #131d2e !important;
+  border: 1px solid #243247 !important;
+  color: #f8fafc !important;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8) !important;
+}
+
+.dark-theme .popup-text {
+  color: #cbd5e1 !important;
+}
+
+/* Admin Panel Theme Compatibility */
+.dark-theme .sidebar {
+  background: #0f172a !important;
+  border-right: 1px solid #1e293b !important;
+}
+
+.dark-theme header {
+  background: #0f172a !important;
+  border-bottom: 1px solid #1e293b !important;
+}
+
+.dark-theme main {
+  background: #090e17 !important;
+}
+
+.dark-theme .card,
+.dark-theme .lead-detail-card,
+.dark-theme .table-card {
+  background: #131d2e !important;
+  border: 1px solid #1e293b !important;
+  color: #f8fafc !important;
+}
+
+.dark-theme table {
+  color: #e2e8f0 !important;
+}
+
+.dark-theme th {
+  background: #0d1524 !important;
+  color: #94a3b8 !important;
+  border-bottom: 2px solid #1e293b !important;
+}
+
+.dark-theme td {
+  border-bottom: 1px solid #1e293b !important;
+  color: #cbd5e1 !important;
+}
+
+.dark-theme tbody tr:hover {
+  background: #1a2538 !important;
+}
+
+.dark-theme .search-wrap,
+.dark-theme .search-wrap input {
+  background: #0d1524 !important;
+  border-color: #243247 !important;
+  color: #f8fafc !important;
+}
+
+
+
+

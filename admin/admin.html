@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Property CRM | Admin</title>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+<script src="/static/theme-toggle.js?v=20261029-highres-dark-logo"></script>
 <style>
 :root {
   --primary: #2A9DAE;
@@ -20,6 +21,539 @@
   --label-color: #4b5563;
   --sidebar-bg: #FFFFFF;
 }
+
+html.dark-theme,
+body.dark-theme,
+[data-theme="dark"] {
+  --bg: #090e17;
+  --card-bg: #131d2e;
+  --input-bg: #0d1524;
+  --border: #1e293b;
+  --text: #f8fafc;
+  --text-muted: #94a3b8;
+  --label-color: #cbd5e1;
+  --sidebar-bg: #0f172a;
+  color-scheme: dark;
+}
+
+/* Day/Night Toggle Switch */
+.day-night-toggle {
+  position: relative;
+  width: 70px;
+  height: 34px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  outline: none;
+  border-radius: 999px;
+  flex-shrink: 0;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+}
+.day-night-toggle:hover { transform: scale(1.05); }
+.day-night-toggle:active { transform: scale(0.96); }
+.day-night-toggle:focus-visible { box-shadow: 0 0 0 3px rgba(42, 157, 174, 0.45); }
+
+.toggle-track {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: 999px;
+  background: #25a4d6;
+  overflow: hidden;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.16), 0 2px 6px rgba(0, 0, 0, 0.08);
+  transition: background-color 0.45s cubic-bezier(0.4, 0, 0.2, 1);
+  display: block;
+}
+
+.scene-day {
+  position: absolute;
+  top: 0; right: 0; bottom: 0; left: 0;
+  pointer-events: none;
+  transition: opacity 0.35s ease, transform 0.45s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.scene-day .cloud {
+  position: absolute;
+  opacity: 0.96;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.06));
+  transition: transform 0.45s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
+}
+.scene-day .cloud-top { width: 21px; height: 12px; top: 4px; right: 8px; }
+.scene-day .cloud-bottom { width: 23px; height: 13px; bottom: 4px; right: 16px; }
+
+.scene-night {
+  position: absolute;
+  top: 0; right: 0; bottom: 0; left: 0;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateX(-10px);
+  transition: opacity 0.35s ease, transform 0.45s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.scene-night .star {
+  position: absolute;
+  transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.scene-night .star-main {
+  width: 12px; height: 12px; top: 12px; left: 8px;
+  animation: starTwinkle 3s infinite ease-in-out;
+}
+.scene-night .star-top {
+  width: 7px; height: 7px; top: 6px; left: 16px;
+  animation: starTwinkle 2.5s infinite ease-in-out 0.8s;
+}
+.scene-night .star-bottom {
+  width: 8px; height: 8px; bottom: 5px; left: 22px;
+  animation: starTwinkle 2.8s infinite ease-in-out 1.4s;
+}
+
+@keyframes starTwinkle {
+  0%, 100% { opacity: 0.95; transform: scale(1); }
+  50% { opacity: 0.45; transform: scale(0.75); }
+}
+
+.celestial-orb {
+  position: absolute;
+  top: 3.5px;
+  left: 4px;
+  width: 27px;
+  height: 27px;
+  border-radius: 50%;
+  background: #ffbc00;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.22);
+  transition: transform 0.45s cubic-bezier(0.68, -0.2, 0.265, 1.25), background-color 0.45s ease, box-shadow 0.45s ease;
+  z-index: 2;
+}
+
+.celestial-orb .crater {
+  position: absolute;
+  border-radius: 50%;
+  background: #9ab4c4;
+  opacity: 0;
+  transform: scale(0.3);
+  transition: opacity 0.35s ease, transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.celestial-orb .crater-large { width: 9px; height: 9px; top: 6px; left: 4px; }
+.celestial-orb .crater-medium { width: 5px; height: 5px; bottom: 5px; right: 5px; }
+.celestial-orb .crater-small { width: 3.5px; height: 3.5px; top: 8px; right: 4px; }
+
+.dark-theme .toggle-track,
+[data-theme="dark"] .toggle-track {
+  background: #212733;
+}
+.dark-theme .scene-day,
+[data-theme="dark"] .scene-day {
+  opacity: 0;
+  transform: translateX(10px) scale(0.75);
+}
+.dark-theme .scene-night,
+[data-theme="dark"] .scene-night {
+  opacity: 1;
+  transform: translateX(0);
+}
+.dark-theme .celestial-orb,
+[data-theme="dark"] .celestial-orb {
+  transform: translateX(35px);
+  background: #cddbe5;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+}
+.dark-theme .celestial-orb .crater,
+[data-theme="dark"] .celestial-orb .crater {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.dark-theme header,
+[data-theme="dark"] header {
+  background: #0f172a !important;
+  border-bottom: 1px solid #1e293b !important;
+}
+.dark-theme .side,
+[data-theme="dark"] .side {
+  background: #0f172a !important;
+  border-right: 1px solid #1e293b !important;
+}
+.dark-theme .group,
+[data-theme="dark"] .group {
+  background: #1e293b !important;
+  color: #f8fafc !important;
+}
+.dark-theme nav a,
+[data-theme="dark"] nav a {
+  color: #94a3b8 !important;
+}
+.dark-theme nav a:hover,
+.dark-theme nav a.active,
+[data-theme="dark"] nav a:hover,
+[data-theme="dark"] nav a.active {
+  background: #1e293b !important;
+  color: #f8fafc !important;
+}
+.dark-theme .panel,
+[data-theme="dark"] .panel,
+.dark-theme .card,
+[data-theme="dark"] .card,
+.dark-theme .table-card,
+[data-theme="dark"] .table-card {
+  background: #131d2e !important;
+  border: 1px solid #1e293b !important;
+  color: #f8fafc !important;
+}
+.dark-theme .top h2,
+[data-theme="dark"] .top h2 {
+  color: #f8fafc !important;
+}
+.dark-theme .top p,
+[data-theme="dark"] .top p {
+  color: #94a3b8 !important;
+}
+.dark-theme .total,
+[data-theme="dark"] .total {
+  background: #0d1524 !important;
+  border-color: #1e293b !important;
+  color: #cbd5e1 !important;
+}
+.dark-theme .tw,
+[data-theme="dark"] .tw {
+  background: #0d1524 !important;
+  border-color: #1e293b !important;
+}
+.dark-theme table,
+[data-theme="dark"] table {
+  background: #0d1524 !important;
+  color: #f8fafc !important;
+}
+.dark-theme th,
+.dark-theme thead th,
+[data-theme="dark"] th,
+[data-theme="dark"] thead th {
+  background: #070c16 !important;
+  color: #94a3b8 !important;
+  border-bottom: 2px solid #1e293b !important;
+}
+.dark-theme tbody,
+[data-theme="dark"] tbody,
+.dark-theme tbody tr,
+[data-theme="dark"] tbody tr,
+.dark-theme td,
+[data-theme="dark"] td {
+  background: #0d1524 !important;
+  border-bottom: 1px solid #1e293b !important;
+  color: #e2e8f0 !important;
+}
+.dark-theme td.wrap,
+[data-theme="dark"] td.wrap {
+  color: #cbd5e1 !important;
+}
+.dark-theme tr:hover td,
+.dark-theme tbody tr:hover td,
+[data-theme="dark"] tr:hover td,
+[data-theme="dark"] tbody tr:hover td {
+  background: #172338 !important;
+}
+.dark-theme .c-info .c-mail,
+[data-theme="dark"] .c-info .c-mail {
+  color: #f1f5f9 !important;
+}
+.dark-theme .c-info .c-tel,
+[data-theme="dark"] .c-info .c-tel {
+  color: #94a3b8 !important;
+}
+.dark-theme a.view-all,
+[data-theme="dark"] a.view-all {
+  color: #38bdf8 !important;
+}
+.dark-theme a.view-all:hover,
+[data-theme="dark"] a.view-all:hover {
+  color: #7dd3fc !important;
+}
+.dark-theme .floating-scroll-btn,
+[data-theme="dark"] .floating-scroll-btn {
+  background: #1e293b !important;
+  color: #38bdf8 !important;
+  border-color: #38bdf8 !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45) !important;
+}
+.dark-theme .floating-scroll-btn:hover,
+[data-theme="dark"] .floating-scroll-btn:hover {
+  background: #0284c7 !important;
+  color: #ffffff !important;
+  box-shadow: 0 6px 20px rgba(2, 132, 199, 0.4) !important;
+}
+.dark-theme .search,
+.dark-theme .search-wrap,
+.dark-theme .search-wrap input,
+[data-theme="dark"] .search,
+[data-theme="dark"] .search-wrap,
+[data-theme="dark"] .search-wrap input {
+  background: #0d1524 !important;
+  border-color: #334155 !important;
+  color: #f8fafc !important;
+}
+.dark-theme .search:focus,
+.dark-theme .search-wrap input:focus,
+[data-theme="dark"] .search:focus,
+[data-theme="dark"] .search-wrap input:focus {
+  background: #0f1c30 !important;
+  border-color: #38bdf8 !important;
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.2) !important;
+  color: #f8fafc !important;
+}
+.dark-theme .search::placeholder,
+.dark-theme .search-wrap input::placeholder,
+[data-theme="dark"] .search::placeholder,
+[data-theme="dark"] .search-wrap input::placeholder {
+  color: #64748b !important;
+}
+.dark-theme .brand-logo,
+[data-theme="dark"] .brand-logo {
+  content: url("/image/profilent-logo-dark.png?v=20261029-dark-logo2");
+  filter: none !important;
+}
+.dark-theme .logout,
+[data-theme="dark"] .logout {
+  background: #1e293b !important;
+  border-color: #334155 !important;
+  color: #f87171 !important;
+}
+.dark-theme .logout:hover,
+[data-theme="dark"] .logout:hover {
+  background: #ef4444 !important;
+  color: #ffffff !important;
+}
+.dark-theme .delbtn-top,
+[data-theme="dark"] .delbtn-top {
+  color: #94a3b8 !important;
+}
+.dark-theme .delbtn-top:hover,
+[data-theme="dark"] .delbtn-top:hover {
+  color: #38bdf8 !important;
+}
+.dark-theme .iconbtn,
+[data-theme="dark"] .iconbtn {
+  background: #1e293b !important;
+  border-color: #334155 !important;
+  color: #cbd5e1 !important;
+}
+.dark-theme .iconbtn:hover,
+[data-theme="dark"] .iconbtn:hover {
+  background: #2A9DAE !important;
+  border-color: #2A9DAE !important;
+  color: #ffffff !important;
+}
+.dark-theme .iconbtn.danger:hover,
+[data-theme="dark"] .iconbtn.danger:hover {
+  background: #ef4444 !important;
+  border-color: #ef4444 !important;
+  color: #ffffff !important;
+}
+.dark-theme .donut,
+.dark-theme .box,
+[data-theme="dark"] .donut,
+[data-theme="dark"] .box {
+  background: #0d1524 !important;
+  border-color: #1e293b !important;
+}
+.dark-theme .box h3,
+[data-theme="dark"] .box h3 {
+  background: #0d1524 !important;
+  border-bottom-color: #1e293b !important;
+  color: #f8fafc !important;
+}
+.dark-theme .item,
+[data-theme="dark"] .item {
+  background: #0d1524 !important;
+  border-bottom-color: #1e293b !important;
+  color: #cbd5e1 !important;
+}
+.dark-theme .item:hover,
+[data-theme="dark"] .item:hover {
+  background: #172338 !important;
+}
+.dark-theme .item b,
+[data-theme="dark"] .item b {
+  color: #f8fafc !important;
+}
+.dark-theme .item .muted,
+[data-theme="dark"] .item .muted {
+  color: #94a3b8 !important;
+}
+.dark-theme .card b,
+[data-theme="dark"] .card b {
+  color: #f8fafc !important;
+}
+.dark-theme .card p,
+[data-theme="dark"] .card p {
+  color: #94a3b8 !important;
+}
+.dark-theme .badge-hot,
+[data-theme="dark"] .badge-hot {
+  background: rgba(239, 68, 68, 0.16) !important;
+  color: #f87171 !important;
+  border-color: rgba(239, 68, 68, 0.35) !important;
+}
+.dark-theme .badge-warm,
+[data-theme="dark"] .badge-warm {
+  background: rgba(245, 158, 11, 0.16) !important;
+  color: #fbbf24 !important;
+  border-color: rgba(245, 158, 11, 0.35) !important;
+}
+.dark-theme .badge-cold,
+[data-theme="dark"] .badge-cold {
+  background: rgba(148, 163, 184, 0.14) !important;
+  color: #cbd5e1 !important;
+  border-color: rgba(148, 163, 184, 0.28) !important;
+}
+.dark-theme .badge-zoho,
+[data-theme="dark"] .badge-zoho {
+  background: rgba(59, 130, 246, 0.16) !important;
+  color: #60a5fa !important;
+  border-color: rgba(59, 130, 246, 0.35) !important;
+}
+.dark-theme .badge-sync-pending,
+[data-theme="dark"] .badge-sync-pending {
+  background: rgba(234, 179, 8, 0.16) !important;
+  color: #fde047 !important;
+  border-color: rgba(234, 179, 8, 0.35) !important;
+}
+.dark-theme .badge-pending,
+[data-theme="dark"] .badge-pending {
+  background: #1e293b !important;
+  color: #94a3b8 !important;
+}
+.dark-theme .badge-src,
+[data-theme="dark"] .badge-src {
+  background: #1e293b !important;
+  color: #cbd5e1 !important;
+  border-color: #334155 !important;
+}
+.dark-theme .badge-src.enquiry,
+[data-theme="dark"] .badge-src.enquiry {
+  background: rgba(245, 158, 11, 0.16) !important;
+  color: #fbbf24 !important;
+  border-color: rgba(245, 158, 11, 0.35) !important;
+}
+.dark-theme .badge-src.whatsapp,
+[data-theme="dark"] .badge-src.whatsapp {
+  background: rgba(16, 185, 129, 0.16) !important;
+  color: #34d399 !important;
+  border-color: rgba(16, 185, 129, 0.35) !important;
+}
+.dark-theme .badge-count,
+[data-theme="dark"] .badge-count {
+  background: #1e293b !important;
+  color: #94a3b8 !important;
+  border-color: #334155 !important;
+}
+.dark-theme .badge-count.multi,
+[data-theme="dark"] .badge-count.multi {
+  background: rgba(239, 68, 68, 0.16) !important;
+  color: #f87171 !important;
+  border-color: rgba(239, 68, 68, 0.35) !important;
+}
+.dark-theme .badge-status-complete,
+[data-theme="dark"] .badge-status-complete {
+  background: rgba(16, 185, 129, 0.16) !important;
+  color: #34d399 !important;
+  border-color: rgba(16, 185, 129, 0.35) !important;
+}
+.dark-theme .badge-status-progress,
+[data-theme="dark"] .badge-status-progress {
+  background: rgba(234, 179, 8, 0.16) !important;
+  color: #fde047 !important;
+  border-color: rgba(234, 179, 8, 0.35) !important;
+}
+.dark-theme .badge-status-awaiting,
+[data-theme="dark"] .badge-status-awaiting {
+  background: rgba(59, 130, 246, 0.16) !important;
+  color: #60a5fa !important;
+  border-color: rgba(59, 130, 246, 0.35) !important;
+}
+.dark-theme .modal,
+[data-theme="dark"] .modal,
+.dark-theme .confirm-card,
+[data-theme="dark"] .confirm-card,
+.dark-theme .lead-detail-modal-card,
+[data-theme="dark"] .lead-detail-modal-card {
+  background: #131d2e !important;
+  border: 1px solid #1e293b !important;
+  color: #f8fafc !important;
+}
+.dark-theme .mfield label,
+[data-theme="dark"] .mfield label {
+  color: #cbd5e1 !important;
+}
+.dark-theme .mfield input,
+.dark-theme .mfield select,
+.dark-theme .mfield textarea,
+[data-theme="dark"] .mfield input,
+[data-theme="dark"] .mfield select,
+[data-theme="dark"] .mfield textarea {
+  background: #0d1524 !important;
+  border-color: #334155 !important;
+  color: #f8fafc !important;
+}
+.dark-theme .mfield input:focus,
+.dark-theme .mfield select:focus,
+.dark-theme .mfield textarea:focus,
+[data-theme="dark"] .mfield input:focus,
+[data-theme="dark"] .mfield select:focus,
+[data-theme="dark"] .mfield textarea:focus {
+  background: #0f1c30 !important;
+  border-color: #38bdf8 !important;
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.2) !important;
+}
+.dark-theme .btn-ghost,
+[data-theme="dark"] .btn-ghost {
+  background: #1e293b !important;
+  border-color: #334155 !important;
+  color: #cbd5e1 !important;
+}
+.dark-theme .btn-ghost:hover,
+[data-theme="dark"] .btn-ghost:hover {
+  background: #334155 !important;
+  color: #f8fafc !important;
+}
+.dark-theme .popup,
+[data-theme="dark"] .popup {
+  background: #131d2e !important;
+  border-color: #2A9DAE !important;
+}
+.dark-theme .popup-bottom,
+[data-theme="dark"] .popup-bottom {
+  background: #131d2e !important;
+  color: #cbd5e1 !important;
+}
+.dark-theme .none,
+[data-theme="dark"] .none {
+  color: #94a3b8 !important;
+}
+.dark-theme .chat-bubble-assistant,
+[data-theme="dark"] .chat-bubble-assistant {
+  background: #1e293b !important;
+  color: #f8fafc !important;
+  border-color: #334155 !important;
+}
+.dark-theme .chat-bubble-user,
+[data-theme="dark"] .chat-bubble-user {
+  background: #064e3b !important;
+  color: #ecfdf5 !important;
+}
+.dark-theme .view-chat-btn,
+[data-theme="dark"] .view-chat-btn {
+  background: #064e3b !important;
+  border-color: #059669 !important;
+  color: #6ee7b7 !important;
+}
+.dark-theme .chat-time,
+[data-theme="dark"] .chat-time {
+  color: #94a3b8 !important;
+}
+
 
 * {
   box-sizing: border-box;
@@ -264,39 +798,6 @@ header h1 {
   border-color: #fecaca;
 }
 
-.workflow-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  background: var(--input-bg);
-  color: var(--primary);
-  border: 1px solid rgba(42, 157, 174, 0.35);
-  padding: 7px 14px;
-  border-radius: 8px;
-  font-size: 0.82rem;
-  font-weight: 600;
-  text-decoration: none;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  white-space: nowrap;
-}
-
-.workflow-btn i {
-  font-size: 0.95rem;
-  color: var(--primary);
-  transition: color 0.2s ease;
-}
-
-.workflow-btn:hover {
-  background: var(--primary);
-  color: #ffffff;
-  border-color: var(--primary);
-  box-shadow: 0 2px 8px var(--primary-shadow);
-}
-
-.workflow-btn:hover i {
-  color: #ffffff;
-}
-
 .badge-hot {
   display: inline-flex;
   align-items: center;
@@ -394,6 +895,122 @@ header h1 {
   background: #fef3c7;
   color: #b45309;
   border-color: #fde68a;
+}
+
+.badge-src.whatsapp {
+  background: #ecfdf5;
+  color: #059669;
+  border-color: #a7f3d0;
+}
+
+.badge-status-complete {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: #ecfdf5;
+  color: #059669;
+  border: 1px solid #a7f3d0;
+  white-space: nowrap;
+}
+
+.badge-status-progress {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #2563eb;
+  border: 1px solid #bfdbfe;
+  white-space: nowrap;
+}
+
+.badge-status-awaiting {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: #fefce8;
+  color: #ca8a04;
+  border: 1px solid #fef08a;
+  white-space: nowrap;
+}
+
+.view-chat-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  border-radius: 6px;
+  border: 1.5px solid #25d366;
+  background: #f0fdf4;
+  color: #15803d;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.view-chat-btn:hover {
+  background: #25d366;
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(37, 211, 102, 0.35);
+}
+
+.chat-bubble-user {
+  align-self: flex-end;
+  background: #dcf8c6;
+  color: #111827;
+  padding: 9px 14px;
+  border-radius: 12px 12px 2px 12px;
+  max-width: 82%;
+  font-size: 0.88rem;
+  line-height: 1.4;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  word-break: break-word;
+}
+
+.chat-bubble-assistant {
+  align-self: flex-start;
+  background: #ffffff;
+  color: #111827;
+  padding: 9px 14px;
+  border-radius: 12px 12px 12px 2px;
+  max-width: 82%;
+  font-size: 0.88rem;
+  line-height: 1.4;
+  border: 1px solid var(--border);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  word-break: break-word;
+}
+
+.chat-bubble-role {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  margin-bottom: 3px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.chat-bubble-user .chat-bubble-role { color: #15803d; }
+.chat-bubble-assistant .chat-bubble-role { color: var(--primary); }
+
+.chat-time {
+  font-size: 0.68rem;
+  color: #6b7280;
+  margin-top: 4px;
+  display: block;
+  text-align: right;
 }
 
 .badge-count {
@@ -706,47 +1323,6 @@ header h1 {
   background: var(--primary-active);
 }
 
-/* Refresh Leads Button (Icon only, no outline) */
-.refbtn {
-  background: transparent;
-  color: var(--primary);
-  border: none;
-  border-radius: 8px;
-  width: 42px;
-  height: 42px;
-  padding: 0;
-  font-size: 1.25rem;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: none;
-  outline: none;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  flex-shrink: 0;
-}
-
-.refbtn:hover {
-  background: #e6f6f8;
-  color: var(--primary-hover);
-  transform: scale(1.08);
-}
-
-.refbtn:active {
-  transform: scale(0.95);
-  background: rgba(42, 157, 174, 0.18);
-}
-
-.refbtn.refreshing {
-  pointer-events: none;
-  opacity: 0.75;
-}
-
-.refbtn.refreshing i {
-  animation: spin 0.75s linear infinite;
-  display: inline-block;
-}
-
 @keyframes spin {
   100% {
     transform: rotate(360deg);
@@ -820,7 +1396,7 @@ header h1 {
   overflow-x: auto;
   border: 1px solid var(--border);
   border-radius: 12px;
-  background: #ffffff;
+  background: var(--card-bg);
   scroll-behavior: smooth;
   -webkit-overflow-scrolling: touch;
 }
@@ -833,7 +1409,7 @@ header h1 {
   width: 44px;
   height: 44px;
   border-radius: 50%;
-  background: #ffffff;
+  background: var(--card-bg);
   color: var(--primary);
   border: 2px solid var(--primary);
   box-shadow: 0 4px 16px rgba(15, 23, 42, 0.16);
@@ -1419,7 +1995,6 @@ tr:hover td {
     justify-content: center;
   }
 
-  .refbtn,
   .delbtn-top {
     width: 42px;
     height: 42px;
@@ -1452,6 +2027,7 @@ tr:hover td {
     <a href="#upsert" data-view="upsert"><i class="bi bi-layers-fill"></i> Upsert Leads</a>
     <a href="#contact" data-view="contact"><i class="bi bi-person-lines-fill"></i> Contact Us Leads</a>
     <a href="#enquiries" data-view="enquiries"><i class="bi bi-house-heart"></i> Property Enquiries</a>
+    <a href="#conversations" data-view="conversations"><i class="bi bi-whatsapp"></i> Property Conversations</a>
   </nav>
 </aside>
 <div class="side-backdrop" id="sideBackdrop" hidden></div>
@@ -1461,7 +2037,26 @@ tr:hover td {
     <button type="button" class="mobile-toggle" id="menuToggle" aria-label="Toggle menu"><i class="bi bi-list"></i></button>
     <h1 id="title">Enquiries Dashboard</h1>
     <div class="admin">
-      <a href="/workflow" target="_blank" class="workflow-btn" title="View System Architecture & Flowchart"><i class="bi bi-diagram-3-fill"></i> Workflow Flowchart</a>
+      <!-- Day (Light) / Night (Dark) Toggle -->
+      <button type="button" class="day-night-toggle" id="dayNightToggle" aria-label="Toggle day and night mode" role="switch" aria-checked="false" title="Switch between Day and Night mode">
+        <span class="toggle-track">
+          <span class="scene-day">
+            <svg class="cloud cloud-top" viewBox="0 0 40 24" fill="#ffffff"><path d="M30 20H10a8 8 0 0 1-1.3-15.9A11 11 0 0 1 29.5 7 7.5 7.5 0 0 1 30 20z"/></svg>
+            <svg class="cloud cloud-bottom" viewBox="0 0 40 24" fill="#ffffff"><path d="M30 20H10a8 8 0 0 1-1.3-15.9A11 11 0 0 1 29.5 7 7.5 7.5 0 0 1 30 20z"/></svg>
+          </span>
+          <span class="scene-night">
+            <svg class="star star-main" viewBox="0 0 20 20" fill="#ffffff"><path d="M10 0L12 7.5L19.5 10L12 12.5L10 20L8 12.5L0.5 10L8 7.5Z"/></svg>
+            <svg class="star star-top" viewBox="0 0 20 20" fill="#ffffff"><path d="M10 0L12 7.5L19.5 10L12 12.5L10 20L8 12.5L0.5 10L8 7.5Z"/></svg>
+            <svg class="star star-bottom" viewBox="0 0 20 20" fill="#ffffff"><path d="M10 0L12 7.5L19.5 10L12 12.5L10 20L8 12.5L0.5 10L8 7.5Z"/></svg>
+          </span>
+          <span class="celestial-orb">
+            <span class="crater crater-large"></span>
+            <span class="crater crater-medium"></span>
+            <span class="crater crater-small"></span>
+          </span>
+        </span>
+      </button>
+
       <button class="logout" id="logoutBtn"><i class="bi bi-box-arrow-right"></i> Logout</button>
       <span class="avatar"><i class="bi bi-person-fill"></i></span><div><b>Admin</b><small>Administrator</small></div>
     </div>
@@ -1472,7 +2067,6 @@ tr:hover td {
     <div class="top">
       <div><h2>Today's Enquiries</h2><p>Lead Summary</p></div>
       <div style="display:flex;align-items:center;gap:10px;">
-        <button type="button" class="refbtn" id="refreshDashboardBtn" title="Refresh Overview"><i class="bi bi-arrow-clockwise"></i></button>
         <span class="total" id="total">Total: 0</span>
       </div>
     </div>
@@ -1488,7 +2082,6 @@ tr:hover td {
     <div class="bar"><div><h2>All Leads</h2><p>Combined records from both customer forms</p></div>
       <div class="right">
         <input class="search" placeholder="Search all leads...">
-        <button type="button" class="refbtn" id="refreshAllBtn" title="Refresh All Leads"><i class="bi bi-arrow-clockwise"></i></button>
         <button type="button" class="delbtn-top" id="delSelectedAll" disabled title="Select leads using checkboxes to delete"><i class="bi bi-trash3"></i></button>
       </div>
     </div>
@@ -1503,7 +2096,6 @@ tr:hover td {
     <div class="bar"><div><h2>Upsert Leads</h2><p>Deduplicated & unified leads combined by phone number and email</p></div>
       <div class="right">
         <input class="search" placeholder="Search upsert leads...">
-        <button type="button" class="refbtn" id="refreshUpsertBtn" title="Refresh Upsert Leads"><i class="bi bi-arrow-clockwise"></i></button>
         <button type="button" class="delbtn-top" id="delSelectedUpsert" disabled title="Select leads using checkboxes to delete"><i class="bi bi-trash3"></i></button>
       </div>
     </div>
@@ -1518,7 +2110,6 @@ tr:hover td {
     <div class="bar"><h2>Contact Us Leads</h2>
       <div class="right">
         <input class="search" placeholder="Search leads...">
-        <button type="button" class="refbtn" id="refreshContactBtn" title="Refresh Contact Us Leads"><i class="bi bi-arrow-clockwise"></i></button>
         <button type="button" class="delbtn-top" id="delSelectedContact" disabled title="Select leads using checkboxes to delete"><i class="bi bi-trash3"></i></button>
         <button class="addbtn" id="addContact"><i class="bi bi-plus-lg"></i> Add Lead</button>
       </div>
@@ -1534,7 +2125,6 @@ tr:hover td {
     <div class="bar"><h2>Property Enquiries</h2>
       <div class="right">
         <input class="search" placeholder="Search leads...">
-        <button type="button" class="refbtn" id="refreshEnquiryBtn" title="Refresh Property Enquiries"><i class="bi bi-arrow-clockwise"></i></button>
         <button type="button" class="delbtn-top" id="delSelectedEnquiry" disabled title="Select leads using checkboxes to delete"><i class="bi bi-trash3"></i></button>
         <button class="addbtn" id="addEnquiry"><i class="bi bi-plus-lg"></i> Add Lead</button>
       </div>
@@ -1545,6 +2135,21 @@ tr:hover td {
       <button type="button" class="floating-scroll-btn scroll-left" data-target="#enqTable" data-dir="-1" title="Scroll Left" hidden><i class="bi bi-chevron-left"></i></button>
     </div>
   </section>
+
+  <section class="panel" id="view-conversations" hidden>
+    <div class="bar"><h2>WhatsApp Property Conversations</h2>
+      <div class="right">
+        <input class="search" placeholder="Search conversations...">
+        <button type="button" class="delbtn-top" id="delSelectedConv" disabled title="Select conversations using checkboxes to delete"><i class="bi bi-trash3"></i></button>
+      </div>
+    </div>
+    <div class="tw-container">
+      <div class="tw" id="convTable"></div>
+      <button type="button" class="floating-scroll-btn scroll-right" data-target="#convTable" data-dir="1" title="Scroll Right"><i class="bi bi-chevron-right"></i></button>
+      <button type="button" class="floating-scroll-btn scroll-left" data-target="#convTable" data-dir="-1" title="Scroll Left" hidden><i class="bi bi-chevron-left"></i></button>
+    </div>
+  </section>
+
 </main>
 
 <div class="modal-overlay" id="modalOverlay" hidden>
@@ -1557,6 +2162,22 @@ tr:hover td {
         <button type="submit" class="btn btn-save" id="modalSave">Save</button>
       </div>
     </form>
+  </div>
+</div>
+
+<div class="modal-overlay" id="chatModalOverlay" hidden>
+  <div class="modal" style="max-width: 640px;">
+    <div class="modal-head">
+      <h3 id="chatModalTitle" style="display:flex;align-items:center;gap:8px;"><i class="bi bi-whatsapp" style="color:#25d366"></i> Chat Transcript</h3>
+      <button class="modal-x" id="chatModalClose">&times;</button>
+    </div>
+    <div style="padding: 12px 24px; border-bottom: 1px solid var(--border); background: var(--input-bg); font-size: 0.82rem; color: var(--text-muted);" id="chatModalSubtitle">
+    </div>
+    <div class="modal-body" id="chatModalBody" style="max-height: 480px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; padding: 20px 24px; background: var(--bg); grid-template-columns: 1fr;">
+    </div>
+    <div class="modal-foot">
+      <button type="button" class="btn btn-ghost" id="chatModalDone">Close</button>
+    </div>
   </div>
 </div>
 
@@ -1624,14 +2245,14 @@ $("#logoutBtn").addEventListener("click", async () => {
   location.href = "/admin/login";
 });
 
-const VIEWS = {dashboard:"CRM Overview", all:"All Leads", upsert:"Upsert Leads", contact:"Contact Us Leads", enquiries:"Property Enquiries"};
+const VIEWS = {dashboard:"CRM Overview", all:"All Leads", upsert:"Upsert Leads", contact:"Contact Us Leads", enquiries:"Property Enquiries", conversations:"Property Conversations"};
 let routeInitialized = false;
 function route() {
   const hashKey = location.hash.slice(1);
   const v = VIEWS[hashKey] ? hashKey : "dashboard";
   for (const k in VIEWS) {
     $("#view-" + k).hidden = k !== v;
-    document.querySelector(`nav a[data-view=${k}]`).classList.toggle("on", k === v);
+    document.querySelector(`nav a[data-view=${k}]`)?.classList.toggle("on", k === v);
   }
   $("#title").textContent = VIEWS[v];
   if (window.innerWidth <= 900) {
@@ -1651,6 +2272,7 @@ const CARDS = [
   ["new_today","New Today","bi-exclamation-circle-fill","#fff1f2","#e11d48"],
   ["contacts_total","Contact Us Leads","bi-telephone-fill","#fff7ed","#ea580c"],
   ["enquiries_total","Property Enquiries","bi-house-fill","#fefce8","#ca8a04"],
+  ["conversations_total","WhatsApp Chats","bi-whatsapp","#ecfdf5","#16a34a"],
   ["immediate","Buying Within 1 Month","bi-lightning-charge-fill","#ecfdf5","#059669"],
   ["cash","Cash Buyers","bi-cash-coin","#f0fdfa","#0d9488"],
   ["high_budget","Budget 1 Cr+","bi-gem","#f5f3ff","#7c3aed"],
@@ -1664,17 +2286,15 @@ const OPTIONS = {
 };
 
 function renderLeadBadge(r) {
-  const isHot = r.lead_rating === "Hot"
-    || ["Immediately", "Within 1 Month"].includes(r.planning_to_buy)
-    || (r.budget_range && (r.budget_range.includes("1 crore") || r.budget_range.includes("Above 2 crore")))
-    || (r.payment_option === "Full Cash Payment");
+  const isHot = r.lead_rating === "Hot";
+  const isWarm = r.lead_rating === "Warm";
 
   let ratingBadge = "";
   const aiInfo = r.ai_analysis ? ` · AI: ${esc(r.ai_analysis)}` : "";
   const scoreInfo = r.lead_score !== undefined && r.lead_score !== null ? ` (Score: ${r.lead_score}/100)` : "";
   if (isHot) {
     ratingBadge = `<span class="badge-hot" title="Hot Lead${scoreInfo}${aiInfo}"><i class="bi bi-fire"></i> Hot Lead</span>`;
-  } else if (r.lead_rating === "Warm" || ["Within 3 Months", "Within 6 Months"].includes(r.planning_to_buy)) {
+  } else if (isWarm) {
     ratingBadge = `<span class="badge-warm" title="Warm Lead${scoreInfo}${aiInfo}">Warm Lead</span>`;
   } else {
     ratingBadge = `<span class="badge-cold" title="Cold Lead${scoreInfo}${aiInfo}">Cold</span>`;
@@ -1709,8 +2329,7 @@ const ENTITIES = {
       ["First Name", r => r.first_name || (r.full_name ? r.full_name.split(" ")[0] : "")],
       ["Last Name", r => r.last_name || (r.full_name ? r.full_name.split(" ").slice(1).join(" ") : "")],
       ["Email & Phone", r => renderContactInfo(r.email, r.contact_number || r.mobile_number)],
-      ["Requirement", r => r.requirement || "-", "wrap"],
-      ["Quality / Zoho", r => renderLeadBadge(r)]
+      ["Requirement", r => r.requirement || "-", "wrap"]
     ],
     fields: [
       {name:"first_name", label:"First Name", type:"text", required:true},
@@ -1718,6 +2337,7 @@ const ENTITIES = {
       {name:"email", label:"Email", type:"email", required:true},
       {name:"contact_number", label:"Mobile Number", type:"tel", required:true},
       {name:"requirement", label:"Requirement / Query", type:"textarea", required:false, full:true},
+      {name:"whatsapp_opt_in", label:"WhatsApp Opt-in", type:"checkbox", required:false},
     ],
   },
   enquiry: {
@@ -1747,21 +2367,27 @@ const ENTITIES = {
       {name:"payment_option", label:"Payment Option", type:"select", options:OPTIONS.payment_option, required:true},
       {name:"bhk_preference", label:"BHK Preference", type:"select", options:OPTIONS.bhk_preference, required:true},
       {name:"requirement", label:"Requirement / Remarks", type:"textarea", required:false, full:true},
+      {name:"whatsapp_opt_in", label:"WhatsApp Opt-in", type:"checkbox", required:false},
     ],
   },
 };
 
-let CACHE = { contact: [], enquiry: [], upsert: [] };
+let CACHE = { contact: [], enquiry: [], upsert: [], conversations: [] };
 
 function table(sel, entityKey, rows) {
   const cols = ENTITIES[entityKey].columns;
   $(sel).innerHTML = rows.length
     ? `<table><thead><tr><th class="col-cb"><input type="checkbox" class="cb-lead select-all" data-entity="${entityKey}" title="Select All"></th><th>#</th>${cols.map(c => `<th>${c[0]}</th>`).join("")}<th>Actions</th></tr></thead><tbody>` +
-      rows.map((r, i) => `<tr data-id="${r.id}"><td class="col-cb"><input type="checkbox" class="cb-lead row-cb" data-entity="${entityKey}" data-id="${r.id}"></td><td>${i + 1}</td>${cols.map(c => `<td class="${c[2] || ""}">${c[0].includes("Quality") || c[0].includes("Zoho") || c[0].includes("Email") || c[0].includes("Phone") ? c[1](r) : esc(c[1](r))}</td>`).join("")}` +
+      rows.map((r, i) => {
+        const waId = entityKey !== 'contact' ? (r.whatsapp_conversation_id || ((CACHE.conversations || []).find(c => (c.email && r.email && c.email.toLowerCase() === r.email.toLowerCase()) || (c.phone && (r.mobile_number || r.contact_number) && c.phone.replace(/\D/g, "").slice(-10) === (r.mobile_number || r.contact_number).replace(/\D/g, "").slice(-10)))?.id)) : null;
+        const waBtn = waId ? `<button type="button" class="view-chat-btn" data-id="${esc(waId)}" title="View full WhatsApp chat transcript"><i class="bi bi-whatsapp"></i> Chat</button>` : '';
+        return `<tr data-id="${r.id}"><td class="col-cb"><input type="checkbox" class="cb-lead row-cb" data-entity="${entityKey}" data-id="${r.id}"></td><td>${i + 1}</td>${cols.map(c => `<td class="${c[2] || ""}">${c[0].includes("Quality") || c[0].includes("Zoho") || c[0].includes("Email") || c[0].includes("Phone") ? c[1](r) : esc(c[1](r))}</td>`).join("")}` +
         `<td><div class="actions">
+           ${waBtn}
            <button type="button" class="iconbtn edit-btn" data-entity="${entityKey}" data-id="${r.id}" title="Edit"><i class="bi bi-pencil"></i></button>
            <button type="button" class="iconbtn danger del-btn" data-entity="${entityKey}" data-id="${r.id}" title="Delete"><i class="bi bi-trash3"></i></button>
-         </div></td></tr>`).join("") +
+         </div></td></tr>`;
+      }).join("") +
       "</tbody></table>"
     : '<p class="none">No record found</p>';
   updateDeleteButtons();
@@ -1772,7 +2398,7 @@ function latest(sel, rows, name, detail) {
     ? rows.slice(0, 5).map(r => `<div class="item"><b>${esc(name(r))}</b><small>${fmt(r.created_at)}</small><span>${esc(detail(r))}</span></div>`).join("")
     : '<p class="none">No record found</p>';
 }
-function allLeadsTable(contacts, enquiries) {
+function allLeadsTable(contacts, enquiries, conversations = []) {
   const rows = [
     ...contacts.map(r => {
       const fn = r.first_name || (r.full_name ? r.full_name.split(" ")[0] : "");
@@ -1807,10 +2433,27 @@ function allLeadsTable(contacts, enquiries) {
         targetLabel: "Property enquiry"
       };
     }),
-  ].sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
+    ...(conversations || []).map(r => {
+      const fn = r.first_name || (r.full_name ? r.full_name.split(" ")[0] : "");
+      const ln = r.last_name || (r.full_name ? r.full_name.split(" ").slice(1).join(" ") : "");
+      const reqPart = r.remarks_requirements && r.remarks_requirements !== '-' ? ` · Query: ${r.remarks_requirements}` : '';
+      const summary = `${r.property_summary || "-"}${reqPart}`;
+      return {
+        ...r,
+        source: "WhatsApp Conversation",
+        first_name: fn,
+        last_name: ln,
+        name: `${fn} ${ln}`.trim() || r.full_name || "WhatsApp Lead",
+        phone: r.phone,
+        summary: summary,
+        target: "#conversations",
+        targetLabel: "View conversation"
+      };
+    }),
+  ].sort((a,b) => new Date(b.created_at || b.updated_at) - new Date(a.created_at || a.updated_at));
   $("#allLeadsTable").innerHTML = rows.length
     ? `<table><thead><tr><th class="col-cb"><input type="checkbox" class="cb-lead select-all" data-entity="all" title="Select All"></th><th>#</th><th>Source</th><th>Date</th><th>First Name</th><th>Last Name</th><th>Email & Phone</th><th>Requirement & Details</th><th>Quality & Zoho</th><th>Open</th></tr></thead><tbody>` +
-      rows.map((r,i) => `<tr data-id="${r.id}"><td class="col-cb"><input type="checkbox" class="cb-lead row-cb" data-entity="${r.source === 'Contact Us' ? 'contact' : 'enquiry'}" data-id="${r.id}"></td><td>${i+1}</td><td>${esc(r.source)}</td><td>${fmt(r.created_at)}</td><td>${esc(r.first_name)}</td><td>${esc(r.last_name)}</td><td>${renderContactInfo(r.email, r.phone)}</td><td class="wrap">${esc(r.summary)}</td><td>${renderLeadBadge(r)}</td><td><a class="view-all" href="${r.target}">${r.targetLabel} →</a></td></tr>`).join("") +
+      rows.map((r,i) => `<tr data-id="${r.id}"><td class="col-cb"><input type="checkbox" class="cb-lead row-cb" data-entity="${r.source === 'Contact Us' ? 'contact' : (r.source === 'Property Enquiry' ? 'enquiry' : 'conversation')}" data-id="${r.id}"></td><td>${i+1}</td><td>${esc(r.source)}</td><td>${fmt(r.created_at || r.updated_at)}</td><td>${esc(r.first_name)}</td><td>${esc(r.last_name)}</td><td>${renderContactInfo(r.email, r.phone)}</td><td class="wrap">${esc(r.summary)}</td><td>${r.source === 'Contact Us' ? '<span class="badge-cold" style="opacity:0.6">-</span>' : renderLeadBadge(r)}</td><td><a class="view-all" href="${r.target}">${r.targetLabel} →</a></td></tr>`).join("") +
       `</tbody></table>`
     : '<p class="none">No records found in either form.</p>';
   updateDeleteButtons();
@@ -1822,8 +2465,11 @@ function renderSourceBadges(sources, count) {
     ? `<span class="badge-count multi" title="${count} total submissions merged"><i class="bi bi-layers-fill"></i> ${count} Submissions</span>`
     : `<span class="badge-count">1 Submission</span>`;
   const srcBadges = (sources || []).map(s => {
+    const isWa = s.includes("WhatsApp");
     const isEnq = s.includes("Enquiry");
-    return `<span class="badge-src ${isEnq ? 'enquiry' : ''}"><i class="bi ${isEnq ? 'bi-house-heart' : 'bi-person-lines-fill'}"></i> ${esc(s)}</span>`;
+    const icon = isWa ? 'bi-whatsapp' : (isEnq ? 'bi-house-heart' : 'bi-person-lines-fill');
+    const cls = isWa ? 'whatsapp' : (isEnq ? 'enquiry' : '');
+    return `<span class="badge-src ${cls}"><i class="bi ${icon}"></i> ${esc(s)}</span>`;
   }).join(" ");
   return `<div class="badge-sources">${srcBadges} ${countBadge}</div>`;
 }
@@ -1843,7 +2489,11 @@ function upsertLeadsTable(rows) {
          <th>Quality / Zoho</th>
          <th>Actions</th>
        </tr></thead><tbody>` +
-      rows.map((r, i) => `
+      rows.map((r, i) => {
+        const convRec = (r.records || []).find(rec => rec.entity === "conversation") 
+          || (CACHE.conversations || []).find(c => (c.email && r.email && c.email.toLowerCase() === r.email.toLowerCase()) || (c.phone && r.phone && c.phone.replace(/\D/g, "").slice(-10) === r.phone.replace(/\D/g, "").slice(-10)));
+        const convBtn = convRec ? `<button type="button" class="view-chat-btn" data-id="${esc(convRec.id || convRec._id)}" title="View full WhatsApp chat transcript"><i class="bi bi-whatsapp"></i> Chat</button>` : '';
+        return `
         <tr data-id="${esc(r.id)}">
           <td class="col-cb"><input type="checkbox" class="cb-lead row-cb" data-entity="upsert" data-id="${esc(r.id)}"></td>
           <td>${i + 1}</td>
@@ -1857,10 +2507,12 @@ function upsertLeadsTable(rows) {
           <td>${renderLeadBadge(r)}</td>
           <td>
             <div class="actions">
+              ${convBtn}
               <button type="button" class="iconbtn danger del-upsert-btn" data-id="${esc(r.id)}" title="Delete Lead (removes all ${r.submission_count || 1} underlying records)"><i class="bi bi-trash3"></i></button>
             </div>
           </td>
-        </tr>`).join("") +
+        </tr>`;
+      }).join("") +
       `</tbody></table>`
     : '<p class="none">No deduplicated leads found.</p>';
   updateDeleteButtons();
@@ -1869,6 +2521,9 @@ function upsertLeadsTable(rows) {
 
 async function loadUpsertLeads() {
   try {
+    if (!CACHE.conversations || !CACHE.conversations.length) {
+      CACHE.conversations = await api("/api/admin/conversations").catch(() => []);
+    }
     const data = await api("/api/admin/upsert-leads");
     CACHE.upsert = data;
     upsertLeadsTable(data);
@@ -1937,15 +2592,135 @@ async function loadTable(entityKey, sel) {
 
 async function loadAllLeads() {
   try {
-    const [c, e] = await Promise.all([api(ENTITIES.contact.api), api(ENTITIES.enquiry.api)]);
-    CACHE.contact = c; CACHE.enquiry = e;
-    allLeadsTable(c, e);
+    const [c, e, convs] = await Promise.all([
+      api(ENTITIES.contact.api),
+      api(ENTITIES.enquiry.api),
+      api("/api/admin/conversations").catch(() => []),
+    ]);
+    CACHE.contact = c; CACHE.enquiry = e; CACHE.conversations = convs;
+    allLeadsTable(c, e, convs);
     $("#err").hidden = true;
   } catch (err) {
     console.error(err);
     $("#err").hidden = false;
   }
 }
+
+function renderConvStatusBadge(status) {
+  if (status === "complete") {
+    return `<span class="badge-status-complete" title="Questionnaire completed"><i class="bi bi-check-circle-fill"></i> Completed</span>`;
+  }
+  if (status === "awaiting_customer_start") {
+    return `<span class="badge-status-awaiting" title="Sent welcome greeting, awaiting customer reply"><i class="bi bi-chat-left-dots"></i> Awaiting Reply</span>`;
+  }
+  return `<span class="badge-status-progress" title="Conversation in progress"><i class="bi bi-hourglass-split"></i> In Progress</span>`;
+}
+
+function convTable(rows) {
+  $("#convTable").innerHTML = rows.length
+    ? `<table><thead><tr>
+         <th class="col-cb"><input type="checkbox" class="cb-lead select-all" data-entity="conversation" title="Select All"></th>
+         <th>#</th>
+         <th>Status</th>
+         <th>Last Active</th>
+         <th>Customer Name</th>
+         <th>Email & Phone</th>
+         <th>Property Preferences</th>
+         <th>Requirements / Notes</th>
+         <th>Quality / Zoho</th>
+         <th>WhatsApp Chat</th>
+         <th>Actions</th>
+       </tr></thead><tbody>` +
+      rows.map((r, i) => `
+        <tr data-id="${esc(r.id)}">
+          <td class="col-cb"><input type="checkbox" class="cb-lead row-cb" data-entity="conversation" data-id="${esc(r.id)}"></td>
+          <td>${i + 1}</td>
+          <td>${renderConvStatusBadge(r.status)}</td>
+          <td>${fmt(r.updated_at || r.created_at)}</td>
+          <td><b>${esc(r.full_name || (r.first_name ? `${r.first_name} ${r.last_name || ''}`.trim() : 'WhatsApp Lead'))}</b></td>
+          <td>${renderContactInfo(r.email, r.phone)}</td>
+          <td class="wrap"><b>${esc(r.property_summary || "-")}</b></td>
+          <td class="wrap" title="${esc(r.remarks_requirements || '-')}">${esc(r.remarks_requirements || "-")}</td>
+          <td>${renderLeadBadge(r)}</td>
+          <td>
+            <button type="button" class="view-chat-btn" data-id="${esc(r.id)}" title="Click to view full WhatsApp chat transcript">
+              <i class="bi bi-whatsapp"></i> Chat (${r.messages_count || 0})
+            </button>
+          </td>
+          <td>
+            <div class="actions">
+              <button type="button" class="iconbtn danger del-conv-btn" data-id="${esc(r.id)}" title="Delete Conversation"><i class="bi bi-trash3"></i></button>
+            </div>
+          </td>
+        </tr>`).join("") +
+      `</tbody></table>`
+    : '<p class="none">No WhatsApp conversations recorded yet.</p>';
+  updateDeleteButtons();
+  setTimeout(updateAllTableScrollIndicators, 60);
+}
+
+async function loadConversations() {
+  try {
+    const data = await api("/api/admin/conversations");
+    CACHE.conversations = data;
+    convTable(data);
+    $("#err").hidden = true;
+  } catch (err) {
+    console.error("Failed to load conversations:", err);
+  }
+}
+
+async function openChatModal(convId) {
+  if (!convId) return;
+  let conv = (CACHE.conversations || []).find(c => c.id === convId || c._id === convId);
+  if (!conv) {
+    try {
+      const data = await api("/api/admin/conversations");
+      CACHE.conversations = data || [];
+      conv = (CACHE.conversations || []).find(c => c.id === convId || c._id === convId);
+    } catch (err) {
+      console.error("Failed to fetch conversation transcript:", err);
+    }
+  }
+  if (!conv) {
+    customAlert("No conversation transcript found for this customer.", "info", "Chat Transcript");
+    return;
+  }
+  const name = conv.full_name || `${conv.first_name || ''} ${conv.last_name || ''}`.trim() || 'WhatsApp Customer';
+  const cleanPhone = (conv.phone || '').replace(/\D/g, '');
+  const waDirectBtn = cleanPhone ? `<a href="https://wa.me/${cleanPhone}" target="_blank" rel="noopener noreferrer" style="background:#25d366;color:#ffffff;display:inline-flex;align-items:center;gap:6px;font-size:0.8rem;padding:4px 10px;text-decoration:none;border-radius:6px;font-weight:600;margin-left:auto;"><i class="bi bi-box-arrow-up-right"></i> Open WhatsApp Web</a>` : '';
+  $("#chatModalTitle").innerHTML = `<div style="display:flex;align-items:center;justify-content:space-between;width:100%;gap:12px;"><span><i class="bi bi-whatsapp" style="color:#25d366"></i> Chat Transcript: ${esc(name)}</span>${waDirectBtn}</div>`;
+  $("#chatModalSubtitle").innerHTML = `<b>Phone:</b> ${esc(conv.phone || '-')} &bull; <b>Status:</b> ${esc(conv.status || '-')} &bull; <b>Preferences:</b> ${esc(conv.property_summary || '-')}`;
+  
+  const msgs = conv.messages || [];
+  if (!msgs.length) {
+    $("#chatModalBody").innerHTML = `<div style="text-align:center;padding:30px;color:var(--text-muted);"><i class="bi bi-chat-square-dots" style="font-size:2rem;display:block;margin-bottom:8px;"></i>No message history recorded for this conversation yet.</div>`;
+  } else {
+    $("#chatModalBody").innerHTML = msgs.map(m => {
+      const isUser = m.role === "user";
+      const roleLabel = isUser ? `<i class="bi bi-person-fill"></i> Customer (${esc(conv.first_name || 'User')})` : `<i class="bi bi-robot"></i> AI Property Assistant`;
+      const cls = isUser ? "chat-bubble-user" : "chat-bubble-assistant";
+      const timeStr = m.timestamp ? fmt(m.timestamp) : "";
+      return `<div class="${cls}">
+        <div class="chat-bubble-role">${roleLabel}</div>
+        <div style="white-space:pre-wrap;">${esc(m.content || '')}</div>
+        ${timeStr ? `<small class="chat-time">${timeStr}</small>` : ''}
+      </div>`;
+    }).join("");
+  }
+  $("#chatModalOverlay").hidden = false;
+  setTimeout(() => {
+    const body = $("#chatModalBody");
+    body.scrollTop = body.scrollHeight;
+  }, 50);
+}
+
+function closeChatModal() {
+  $("#chatModalOverlay").hidden = true;
+}
+$("#chatModalClose")?.addEventListener("click", closeChatModal);
+$("#chatModalDone")?.addEventListener("click", closeChatModal);
+$("#chatModalOverlay")?.addEventListener("click", e => { if (e.target === $("#chatModalOverlay")) closeChatModal(); });
 
 function search(entityKey, sel, q) {
   q = q.toLowerCase();
@@ -1959,12 +2734,18 @@ $("#view-all .search").addEventListener("input", e => {
   const q = e.target.value.toLowerCase();
   const c = CACHE.contact.filter(r => JSON.stringify(r).toLowerCase().includes(q));
   const enq = CACHE.enquiry.filter(r => JSON.stringify(r).toLowerCase().includes(q));
-  allLeadsTable(c, enq);
+  const convs = (CACHE.conversations || []).filter(r => JSON.stringify(r).toLowerCase().includes(q));
+  allLeadsTable(c, enq, convs);
 });
 $("#view-upsert .search")?.addEventListener("input", e => {
   const q = e.target.value.toLowerCase();
   const rows = (CACHE.upsert || []).filter(r => JSON.stringify(r).toLowerCase().includes(q));
   upsertLeadsTable(rows);
+});
+$("#view-conversations .search")?.addEventListener("input", e => {
+  const q = e.target.value.toLowerCase();
+  const rows = (CACHE.conversations || []).filter(r => JSON.stringify(r).toLowerCase().includes(q));
+  convTable(rows);
 });
 
 // Refresh Functionality for every leads section
@@ -1979,7 +2760,8 @@ async function refreshSection(viewKey, btn = null) {
       if (q) {
         const c = (CACHE.contact || []).filter(r => JSON.stringify(r).toLowerCase().includes(q.toLowerCase()));
         const enq = (CACHE.enquiry || []).filter(r => JSON.stringify(r).toLowerCase().includes(q.toLowerCase()));
-        allLeadsTable(c, enq);
+        const convs = (CACHE.conversations || []).filter(r => JSON.stringify(r).toLowerCase().includes(q.toLowerCase()));
+        allLeadsTable(c, enq, convs);
       }
     } else if (viewKey === "upsert") {
       await loadUpsertLeads();
@@ -1987,6 +2769,13 @@ async function refreshSection(viewKey, btn = null) {
       if (q) {
         const rows = (CACHE.upsert || []).filter(r => JSON.stringify(r).toLowerCase().includes(q.toLowerCase()));
         upsertLeadsTable(rows);
+      }
+    } else if (viewKey === "conversations") {
+      await loadConversations();
+      const q = $("#view-conversations .search")?.value?.trim();
+      if (q) {
+        const rows = (CACHE.conversations || []).filter(r => JSON.stringify(r).toLowerCase().includes(q.toLowerCase()));
+        convTable(rows);
       }
     } else if (viewKey === "contact") {
       await loadTable("contact", "#contactTable");
@@ -2007,12 +2796,8 @@ async function refreshSection(viewKey, btn = null) {
   }
 }
 
-// Bind Refresh Buttons
-$("#refreshDashboardBtn")?.addEventListener("click", e => refreshSection("dashboard", e.currentTarget));
-$("#refreshAllBtn")?.addEventListener("click", e => refreshSection("all", e.currentTarget));
-$("#refreshUpsertBtn")?.addEventListener("click", e => refreshSection("upsert", e.currentTarget));
-$("#refreshContactBtn")?.addEventListener("click", e => refreshSection("contact", e.currentTarget));
-$("#refreshEnquiryBtn")?.addEventListener("click", e => refreshSection("enquiries", e.currentTarget));
+// Automatic Live Synchronization
+// All qualifying Hot Leads auto-sync directly to Zoho CRM in real-time. Manual sync button is not needed.
 
 // Modal: Add / Edit
 let activeEntity = null;
@@ -2025,7 +2810,9 @@ function renderModalFields(entityKey, record = {}) {
     const req = f.required ? "required" : "";
     const val = esc(record[f.name] ?? (f.name === "contact_number" ? (record.mobile_number || "") : (f.name === "mobile_number" ? (record.contact_number || "") : "")) ?? "");
     let input;
-    if (f.type === "select") {
+    if (f.type === "checkbox") {
+      input = `<input type="checkbox" name="${f.name}" ${record[f.name] ? "checked" : ""}>`;
+    } else if (f.type === "select") {
       input = `<select name="${f.name}" ${req}>${f.options.map(o => `<option value="${esc(o)}" ${val===o?"selected":""}>${esc(o)}</option>`).join("")}</select>`;
     } else if (f.type === "textarea") {
       input = `<textarea name="${f.name}" ${req}>${val}</textarea>`;
@@ -2058,10 +2845,14 @@ $("#addContact").addEventListener("click", () => openModal("contact"));
 $("#addEnquiry").addEventListener("click", () => openModal("enquiry"));
 
 document.body.addEventListener("click", e => {
+  const viewChat = e.target.closest(".view-chat-btn");
+  if (viewChat) { openChatModal(viewChat.dataset.id); return; }
   const edit = e.target.closest(".edit-btn");
   if (edit) { openModal(edit.dataset.entity, edit.dataset.id); return; }
   const del = e.target.closest(".del-btn");
   if (del) { confirmDelete(del.dataset.entity, del.dataset.id); return; }
+  const delConv = e.target.closest(".del-conv-btn");
+  if (delConv) { confirmDelete("conversations", delConv.dataset.id); return; }
   const delUpsert = e.target.closest(".del-upsert-btn");
   if (delUpsert) {
     const lead = (CACHE.upsert || []).find(x => x.id === delUpsert.dataset.id);
@@ -2075,9 +2866,13 @@ document.body.addEventListener("click", e => {
 $("#modalForm").addEventListener("submit", async e => {
   e.preventDefault();
   const form = e.target;
+  const savedEntity = activeEntity;
   const payload = {};
-  new FormData(form).forEach((v, k) => payload[k] = v.trim());
-  const entity = ENTITIES[activeEntity];
+  new FormData(form).forEach((v, k) => payload[k] = typeof v === "string" ? v.trim() : v);
+  for (const checkbox of form.querySelectorAll('input[type="checkbox"]')) {
+    payload[checkbox.name] = checkbox.checked;
+  }
+  const entity = ENTITIES[savedEntity];
   const url = editingId ? `${entity.api}/${editingId}` : entity.api;
   const method = editingId ? "PUT" : "POST";
 
@@ -2085,7 +2880,8 @@ $("#modalForm").addEventListener("submit", async e => {
   try {
     await api(url, { method, body: JSON.stringify(payload) });
     closeModal();
-    if (activeEntity === "contact") await loadTable("contact", "#contactTable");
+    if (savedEntity === "contact") await loadTable("contact", "#contactTable");
+    else if (savedEntity === "enquiry") await loadTable("enquiry", "#enqTable");
     else await loadTable("enquiry", "#enqTable");
     refreshDashboard();
   } catch (err) {
@@ -2155,10 +2951,20 @@ function updateDeleteButtons() {
     btnU.innerHTML = `<i class="bi ${uSel.length > 0 ? 'bi-trash3-fill' : 'bi-trash3'}"></i>`;
     btnU.title = uSel.length ? `Delete ${uSel.length} selected lead${uSel.length > 1 ? "s" : ""}` : "Select leads using checkboxes to delete";
   }
-  const saU = $("#upsertLeadsTable .select-all");
-  if (saU && uCbs.length) {
-    saU.checked = uSel.length === uCbs.length;
-    saU.indeterminate = uSel.length > 0 && uSel.length < uCbs.length;
+  // 5. WhatsApp Conversations view
+  const convCbs = Array.from(document.querySelectorAll("#convTable .row-cb"));
+  const convSel = convCbs.filter(cb => cb.checked);
+  const btnConv = $("#delSelectedConv");
+  if (btnConv) {
+    btnConv.disabled = convSel.length === 0;
+    btnConv.classList.toggle("active", convSel.length > 0);
+    btnConv.innerHTML = `<i class="bi ${convSel.length > 0 ? 'bi-trash3-fill' : 'bi-trash3'}"></i>`;
+    btnConv.title = convSel.length ? `Delete ${convSel.length} selected conversation${convSel.length > 1 ? "s" : ""}` : "Select conversations using checkboxes to delete";
+  }
+  const saConv = $("#convTable .select-all");
+  if (saConv && convCbs.length) {
+    saConv.checked = convSel.length === convCbs.length;
+    saConv.indeterminate = convSel.length > 0 && convSel.length < convCbs.length;
   }
 }
 
@@ -2198,6 +3004,14 @@ $("#delSelectedAll")?.addEventListener("click", () => {
   confirmBatchDelete(items);
 });
 
+$("#delSelectedConv")?.addEventListener("click", () => {
+  const items = Array.from(document.querySelectorAll("#convTable .row-cb:checked")).map(cb => ({
+    id: cb.dataset.id,
+    entity: "conversation",
+  }));
+  confirmBatchDelete(items);
+});
+
 $("#delSelectedUpsert")?.addEventListener("click", () => {
   const selectedIds = Array.from(document.querySelectorAll("#upsertLeadsTable .row-cb:checked")).map(cb => cb.dataset.id);
   const items = [];
@@ -2217,16 +3031,16 @@ let pendingDelete = null;
 function confirmDelete(entityKey, id) {
   pendingDelete = { entityKey, id };
   $("#confirmTitle").textContent = "Confirm Delete";
-  $("#confirmMessage").textContent = "Are you sure you want to delete this lead? This action cannot be undone.";
-  $("#confirmAccept").textContent = "Delete lead";
+  $("#confirmMessage").textContent = "Are you sure you want to delete this record? This action cannot be undone.";
+  $("#confirmAccept").textContent = "Delete";
   $("#confirmOverlay").hidden = false;
 }
 function confirmBatchDelete(items) {
   if (!items || !items.length) return;
   pendingDelete = { batch: true, items };
-  $("#confirmTitle").textContent = `Delete ${items.length} Lead${items.length > 1 ? "s" : ""}`;
-  $("#confirmMessage").textContent = `Are you sure you want to delete ${items.length} selected lead${items.length > 1 ? "s" : ""}? This action cannot be undone.`;
-  $("#confirmAccept").textContent = `Delete ${items.length} lead${items.length > 1 ? "s" : ""}`;
+  $("#confirmTitle").textContent = `Delete ${items.length} Record${items.length > 1 ? "s" : ""}`;
+  $("#confirmMessage").textContent = `Are you sure you want to delete ${items.length} selected record${items.length > 1 ? "s" : ""}? This action cannot be undone.`;
+  $("#confirmAccept").textContent = `Delete ${items.length} record${items.length > 1 ? "s" : ""}`;
   $("#confirmOverlay").hidden = false;
 }
 function hideConfirm() {
@@ -2248,6 +3062,7 @@ $("#confirmAccept").addEventListener("click", async () => {
       await Promise.all([
         loadTable("contact", "#contactTable"),
         loadTable("enquiry", "#enqTable"),
+        loadConversations(),
         loadAllLeads(),
         loadUpsertLeads(),
       ]);
@@ -2255,10 +3070,15 @@ $("#confirmAccept").addEventListener("click", async () => {
       updateDeleteButtons();
     } else {
       const { entityKey, id } = pendingDelete;
-      await api(`${ENTITIES[entityKey].api}/${id}`, { method: "DELETE" });
+      if (entityKey === "conversations" || entityKey === "conversation") {
+        await api(`/api/admin/conversations/${id}`, { method: "DELETE" });
+      } else {
+        await api(`${ENTITIES[entityKey].api}/${id}`, { method: "DELETE" });
+      }
       hideConfirm();
       if (entityKey === "contact") await loadTable("contact", "#contactTable");
-      else await loadTable("enquiry", "#enqTable");
+      else if (entityKey === "enquiry") await loadTable("enquiry", "#enqTable");
+      else if (entityKey === "conversations" || entityKey === "conversation") await loadConversations();
       loadAllLeads();
       loadUpsertLeads();
       refreshDashboard();
@@ -2374,14 +3194,43 @@ document.addEventListener("click", e => {
   }
 });
 
-// Polling interval for live sync
+// Initial load
 refreshDashboard();
 loadTable("contact", "#contactTable");
 loadTable("enquiry", "#enqTable");
 loadAllLeads();
 loadUpsertLeads();
+loadConversations();
 setTimeout(bindTableScrollListeners, 200);
-setInterval(refreshDashboard, 15000);
+
+// Continuous background auto-refresh for real-time live synchronization
+let isAutoRefreshing = false;
+async function autoRefreshLiveData() {
+  if (isAutoRefreshing) return;
+  // Do not interrupt user if searching, entering modal details, or selecting leads
+  const isSearchActive = document.activeElement && document.activeElement.classList.contains("search");
+  const isModalOpen = ($("#modalOverlay") && !$("#modalOverlay").hidden) || ($("#chatModalOverlay") && !$("#chatModalOverlay").hidden);
+  const hasSelectedLeads = document.querySelectorAll(".row-cb:checked").length > 0;
+  if (isSearchActive || isModalOpen || hasSelectedLeads) return;
+
+  isAutoRefreshing = true;
+  try {
+    const hashKey = location.hash.slice(1);
+    const activeView = VIEWS[hashKey] ? hashKey : "dashboard";
+    // Auto-refresh the currently active view and top summary counters
+    await Promise.allSettled([
+      refreshSection(activeView),
+      refreshDashboard(),
+    ]);
+  } catch (err) {
+    console.warn("Auto-refresh skipped:", err);
+  } finally {
+    isAutoRefreshing = false;
+  }
+}
+
+// Automatically refresh live data every 6 seconds
+setInterval(autoRefreshLiveData, 6000);
 </script>
 </body>
 </html>
