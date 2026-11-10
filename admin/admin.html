@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Property CRM | Admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
 <script src="/static/theme-toggle.js?v=20261029-highres-dark-logo"></script>
 <style>
@@ -11,28 +14,44 @@
   --primary: #2A9DAE;
   --primary-hover: #238594;
   --primary-active: #1e7482;
-  --primary-shadow: rgba(42, 157, 174, 0.3);
-  --bg: #F7F9FA;
+  --primary-subtle: rgba(42, 157, 174, 0.08);
+  --primary-shadow: rgba(42, 157, 174, 0.25);
+  --bg: #F8FAFC;
   --card-bg: #FFFFFF;
-  --input-bg: #EEF1F0;
-  --border: #EEF1F0;
-  --text: #111827;
-  --text-muted: #64748b;
-  --label-color: #4b5563;
+  --input-bg: #F1F5F9;
+  --border: #E2E8F0;
+  --border-subtle: #EDF2F7;
+  --text: #0F172A;
+  --text-muted: #64748B;
+  --label-color: #475569;
   --sidebar-bg: #FFFFFF;
+  --shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.04);
+  --shadow-sm: 0 1px 3px 0 rgba(15, 23, 42, 0.06), 0 1px 2px -1px rgba(15, 23, 42, 0.04);
+  --shadow-md: 0 4px 14px -2px rgba(15, 23, 42, 0.08), 0 2px 6px -2px rgba(15, 23, 42, 0.04);
+  --shadow-lg: 0 12px 28px -4px rgba(15, 23, 42, 0.1), 0 4px 12px -2px rgba(15, 23, 42, 0.04);
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
 }
 
 html.dark-theme,
 body.dark-theme,
 [data-theme="dark"] {
   --bg: #090e17;
-  --card-bg: #131d2e;
-  --input-bg: #0d1524;
+  --card-bg: #111a2c;
+  --input-bg: #0b1322;
   --border: #1e293b;
+  --border-subtle: #172338;
   --text: #f8fafc;
   --text-muted: #94a3b8;
   --label-color: #cbd5e1;
-  --sidebar-bg: #0f172a;
+  --sidebar-bg: #0d1524;
+  --primary-subtle: rgba(42, 157, 174, 0.18);
+  --primary-shadow: rgba(42, 157, 174, 0.35);
+  --shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.4);
+  --shadow-sm: 0 2px 6px 0 rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 4px 16px 0 rgba(0, 0, 0, 0.45);
+  --shadow-lg: 0 12px 32px 0 rgba(0, 0, 0, 0.55);
   color-scheme: dark;
 }
 
@@ -351,44 +370,164 @@ body.dark-theme,
   border-color: #ef4444 !important;
   color: #ffffff !important;
 }
+.dark-theme .dash-hero,
+[data-theme="dark"] .dash-hero {
+  background: #111a2c !important;
+  border-color: #1e293b !important;
+}
+.dark-theme .dash-hero-text h2,
+[data-theme="dark"] .dash-hero-text h2 {
+  color: #f8fafc !important;
+}
+.dark-theme .dash-hero-text p,
+[data-theme="dark"] .dash-hero-text p {
+  color: #94a3b8 !important;
+}
+.dark-theme .btn-dash-refresh,
+[data-theme="dark"] .btn-dash-refresh {
+  background: #0d1524 !important;
+  border-color: #1e293b !important;
+  color: #e2e8f0 !important;
+}
+.dark-theme .btn-dash-refresh:hover,
+[data-theme="dark"] .btn-dash-refresh:hover {
+  background: #2A9DAE !important;
+  border-color: #2A9DAE !important;
+  color: #ffffff !important;
+}
+.dark-theme .widget-header,
+[data-theme="dark"] .widget-header {
+  background: #111a2c !important;
+  border-bottom-color: #1e293b !important;
+}
+.dark-theme .widget-title h3,
+[data-theme="dark"] .widget-title h3 {
+  color: #f8fafc !important;
+}
+.dark-theme .widget-title p,
+[data-theme="dark"] .widget-title p {
+  color: #94a3b8 !important;
+}
+.dark-theme .view-all-btn,
+[data-theme="dark"] .view-all-btn {
+  background: #0d1524 !important;
+  border-color: #1e293b !important;
+  color: #cbd5e1 !important;
+}
+.dark-theme .view-all-btn:hover,
+[data-theme="dark"] .view-all-btn:hover {
+  background: #2A9DAE !important;
+  color: #ffffff !important;
+  border-color: #2A9DAE !important;
+}
 .dark-theme .donut,
 .dark-theme .box,
 [data-theme="dark"] .donut,
 [data-theme="dark"] .box {
-  background: #0d1524 !important;
+  background: #111a2c !important;
   border-color: #1e293b !important;
+  box-shadow: 0 4px 16px 0 rgba(0, 0, 0, 0.4) !important;
 }
-.dark-theme .box h3,
-[data-theme="dark"] .box h3 {
-  background: #0d1524 !important;
-  border-bottom-color: #1e293b !important;
+.dark-theme .donut-center-info b,
+[data-theme="dark"] .donut-center-info b {
   color: #f8fafc !important;
+}
+.dark-theme .donut-center-info small,
+[data-theme="dark"] .donut-center-info small {
+  color: #94a3b8 !important;
+}
+.dark-theme .bhk-chip,
+[data-theme="dark"] .bhk-chip {
+  background: #0b1322 !important;
+  border-color: #1e293b !important;
+  color: #cbd5e1 !important;
+}
+.dark-theme .bhk-breakdown-chips,
+[data-theme="dark"] .bhk-breakdown-chips {
+  border-top-color: #1e293b !important;
 }
 .dark-theme .item,
 [data-theme="dark"] .item {
-  background: #0d1524 !important;
+  background: #111a2c !important;
   border-bottom-color: #1e293b !important;
   color: #cbd5e1 !important;
 }
 .dark-theme .item:hover,
 [data-theme="dark"] .item:hover {
-  background: #172338 !important;
+  background: #182338 !important;
 }
-.dark-theme .item b,
-[data-theme="dark"] .item b {
+.dark-theme .item-name,
+[data-theme="dark"] .item-name {
   color: #f8fafc !important;
 }
-.dark-theme .item .muted,
-[data-theme="dark"] .item .muted {
+.dark-theme .item-time,
+[data-theme="dark"] .item-time {
+  background: #0b1322 !important;
   color: #94a3b8 !important;
 }
-.dark-theme .card b,
-[data-theme="dark"] .card b {
+.dark-theme .feed-tag.wa,
+[data-theme="dark"] .feed-tag.wa {
+  background: rgba(16, 185, 129, 0.16) !important;
+  color: #34d399 !important;
+  border-color: rgba(16, 185, 129, 0.3) !important;
+}
+.dark-theme .feed-tag.web,
+[data-theme="dark"] .feed-tag.web {
+  background: rgba(148, 163, 184, 0.16) !important;
+  color: #cbd5e1 !important;
+  border-color: rgba(148, 163, 184, 0.25) !important;
+}
+.dark-theme .feed-tag.loc,
+[data-theme="dark"] .feed-tag.loc {
+  background: rgba(42, 157, 174, 0.18) !important;
+  color: #5eead4 !important;
+  border-color: rgba(42, 157, 174, 0.35) !important;
+}
+.dark-theme .feed-tag.budget,
+[data-theme="dark"] .feed-tag.budget {
+  background: rgba(234, 179, 8, 0.18) !important;
+  color: #fde047 !important;
+  border-color: rgba(234, 179, 8, 0.35) !important;
+}
+.dark-theme .feed-tag.bhk,
+[data-theme="dark"] .feed-tag.bhk {
+  background: rgba(129, 140, 248, 0.18) !important;
+  color: #a5b4fc !important;
+  border-color: rgba(129, 140, 248, 0.35) !important;
+}
+.dark-theme .card,
+[data-theme="dark"] .card {
+  background: #111a2c !important;
+  border-color: #1e293b !important;
+  box-shadow: 0 2px 8px 0 rgba(0, 0, 0, 0.35) !important;
+}
+.dark-theme .card:hover,
+[data-theme="dark"] .card:hover {
+  box-shadow: 0 8px 24px -4px rgba(0, 0, 0, 0.6) !important;
+}
+.dark-theme .card-val,
+[data-theme="dark"] .card-val {
   color: #f8fafc !important;
 }
-.dark-theme .card p,
-[data-theme="dark"] .card p {
+.dark-theme .card-title,
+[data-theme="dark"] .card-title {
   color: #94a3b8 !important;
+}
+.dark-theme .card .ic,
+[data-theme="dark"] .card .ic {
+  background: rgba(255, 255, 255, 0.06) !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+}
+.dark-theme .card-pill,
+[data-theme="dark"] .card-pill {
+  background: rgba(255, 255, 255, 0.06) !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+}
+.dark-theme .total,
+[data-theme="dark"] .total {
+  background: rgba(42, 157, 174, 0.18) !important;
+  border-color: rgba(42, 157, 174, 0.4) !important;
+  color: #5eead4 !important;
 }
 .dark-theme .badge-hot,
 [data-theme="dark"] .badge-hot {
@@ -559,7 +698,7 @@ body.dark-theme,
   box-sizing: border-box;
   margin: 0;
   padding: 0;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, Helvetica, Arial, sans-serif;
 }
 
 body {
@@ -646,7 +785,7 @@ body {
   background: var(--input-bg);
   color: var(--text);
   padding: 11px 14px;
-  border-radius: 8px;
+  border-radius: 10px;
   font-weight: 600;
   font-size: 0.88rem;
   letter-spacing: 0.01em;
@@ -661,42 +800,42 @@ nav {
   margin-top: 14px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 5px;
 }
 
 nav a {
   display: flex;
   gap: 12px;
   align-items: center;
-  padding: 11px 14px;
+  padding: 10px 14px;
   color: var(--text-muted);
   text-decoration: none;
   font-size: 0.88rem;
   font-weight: 500;
-  border-radius: 8px;
-  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: 10px;
+  transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 nav a i {
-  font-size: 1rem;
+  font-size: 1.05rem;
   color: #94a3b8;
-  transition: color 0.15s ease;
+  transition: color 0.18s ease;
 }
 
 nav a:hover {
-  background: #f1f5f9;
-  color: var(--text);
+  background: var(--primary-subtle);
+  color: var(--primary);
 }
 
 nav a:hover i {
-  color: var(--text);
+  color: var(--primary);
 }
 
 nav a.on {
-  background: var(--primary);
+  background: linear-gradient(135deg, #2A9DAE 0%, #208796 100%);
   color: #ffffff;
   font-weight: 600;
-  box-shadow: 0 4px 12px var(--primary-shadow);
+  box-shadow: 0 4px 14px var(--primary-shadow);
 }
 
 nav a.on i {
@@ -718,11 +857,20 @@ header {
   gap: 14px;
   min-height: 68px;
   padding: 14px clamp(16px, 2.5vw, 32px);
-  background: #ffffff;
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--border);
   position: sticky;
   top: 0;
   z-index: 40;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.03);
+}
+
+.dark-theme header,
+[data-theme="dark"] header {
+  background: rgba(13, 21, 36, 0.88);
+  border-bottom-color: var(--border);
 }
 
 header .mobile-toggle {
@@ -744,7 +892,7 @@ header h1 {
   font-weight: 700;
   margin: 0;
   color: var(--text);
-  letter-spacing: -0.015em;
+  letter-spacing: -0.02em;
 }
 
 .admin {
@@ -758,6 +906,7 @@ header h1 {
   font-size: 0.88rem;
   color: var(--text);
   display: block;
+  font-weight: 600;
 }
 
 .admin small {
@@ -769,12 +918,13 @@ header h1 {
 .avatar {
   width: 36px;
   height: 36px;
-  border-radius: 8px;
-  background: var(--input-bg);
+  border-radius: 10px;
+  background: var(--primary-subtle);
   display: grid;
   place-items: center;
   color: var(--primary);
   font-size: 1.2rem;
+  border: 1px solid rgba(42, 157, 174, 0.2);
 }
 
 .logout {
@@ -1044,188 +1194,511 @@ header h1 {
   border-radius: 16px;
   margin: 20px clamp(16px, 2.5vw, 32px);
   padding: 24px clamp(16px, 2.5vw, 28px);
-  box-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.04);
+  box-shadow: var(--shadow-sm);
 }
 
-.top {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 6px;
+/* Dashboard Executive Panel */
+.dashboard-panel {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  margin: 20px clamp(16px, 2.5vw, 32px);
 }
 
-.top h2 {
-  font-size: 1.15rem;
-  font-weight: 700;
-  margin: 0 0 2px 0;
-  color: var(--text);
-  letter-spacing: -0.01em;
-}
-
-.top p {
-  margin: 0;
-  font-size: 0.82rem;
-  color: var(--text-muted);
-}
-
-.total {
-  border: 1px solid var(--border);
-  background: var(--input-bg);
-  border-radius: 8px;
-  padding: 6px 14px;
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: #374151;
-}
-
-/* KPI Summary Cards */
-.cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 16px;
-  margin: 18px 0 28px;
-}
-
-.card {
-  border-radius: 12px;
-  padding: 16px 18px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  min-height: 104px;
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
-}
-
-.card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.06);
-}
-
-.card .r {
+.dash-hero {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 18px 24px;
+  margin-bottom: 20px;
+  box-shadow: var(--shadow-sm);
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.dash-hero-text h2 {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: var(--text);
+  margin: 0 0 4px;
+  letter-spacing: -0.02em;
+}
+
+.dash-hero-text p {
+  margin: 0;
+  font-size: 0.83rem;
+  color: var(--text-muted);
+}
+
+.dash-hero-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.live-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(16, 185, 129, 0.1);
+  color: #059669;
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.pulse-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #10b981;
+  box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+  animation: pulseLive 2s infinite;
+}
+
+@keyframes pulseLive {
+  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+  70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
+  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+}
+
+.total-lead-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--primary-subtle);
+  color: var(--primary);
+  border: 1px solid rgba(42, 157, 174, 0.25);
+  padding: 5px 14px;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.btn-dash-refresh {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--input-bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  padding: 6px 14px;
+  border-radius: 10px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-dash-refresh:hover {
+  background: var(--primary);
+  color: #ffffff;
+  border-color: var(--primary);
+  transform: translateY(-1px);
+  box-shadow: 0 3px 10px var(--primary-shadow);
+}
+
+/* KPI Summary Cards - Balanced 4x2 Modern SaaS Grid */
+.cards {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin: 0 0 24px;
+}
+
+@media (max-width: 1200px) {
+  .cards {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 600px) {
+  .cards {
+    grid-template-columns: 1fr;
+  }
+}
+
+.card {
+  position: relative;
+  border-radius: 16px;
+  padding: 18px 20px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+  min-height: 122px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.2s ease;
+  cursor: default;
+}
+
+.card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--ic);
+}
+
+.card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .card .ic {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
   display: grid;
   place-items: center;
-  color: #fff;
-  background: var(--ic);
-  font-size: 1.05rem;
+  color: var(--ic);
+  background: var(--bg);
+  font-size: 1.15rem;
+  border: 1px solid rgba(0, 0, 0, 0.04);
+  transition: transform 0.2s ease;
 }
 
-.card b {
-  font-size: 1.45rem;
+.card:hover .ic {
+  transform: scale(1.08);
+}
+
+.card-pill {
+  font-size: 0.72rem;
   font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--ic);
+  letter-spacing: 0.02em;
+  border: 1px solid rgba(0, 0, 0, 0.04);
+}
+
+.card-val {
+  font-size: 2.15rem;
+  font-weight: 800;
   color: var(--text);
   line-height: 1;
+  margin: 12px 0 4px;
+  letter-spacing: -0.03em;
 }
 
-.card p {
-  margin: 12px 0 0;
-  font-size: 0.82rem;
+.card-title {
+  font-size: 0.84rem;
   font-weight: 600;
-  color: #4b5563;
+  color: var(--text-muted);
+  margin: 0;
+  letter-spacing: -0.01em;
   line-height: 1.25;
 }
 
-/* Dashboard Grid: Chart + Latest */
+/* Dashboard Grid: Chart + Latest Leads Feeds */
 .grid2 {
   display: grid;
   grid-template-columns: 1.25fr 1fr 1fr;
   gap: 20px;
 }
 
-.donut {
-  position: relative;
-  background: var(--bg);
+@media (max-width: 1080px) {
+  .grid2 {
+    grid-template-columns: 1fr;
+  }
+}
+
+.donut, .box {
+  background: var(--card-bg);
   border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 16px 18px;
-  height: 360px;
-}
-
-.donut h3 {
-  font-size: 0.88rem;
-  font-weight: 700;
-  margin: 0 0 10px;
-  color: var(--text);
-  text-align: center;
-}
-
-.donut .cv {
-  position: relative;
-  height: 290px;
-}
-
-.box {
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  overflow: hidden;
-  height: 360px;
+  border-radius: 16px;
+  box-shadow: var(--shadow-sm);
   display: flex;
   flex-direction: column;
+  min-height: 420px;
+  overflow: hidden;
 }
 
-.box h3 {
-  background: #ffffff;
+.widget-header {
+  padding: 16px 20px;
   border-bottom: 1px solid var(--border);
-  padding: 14px 18px;
-  font-size: 0.88rem;
-  font-weight: 700;
-  margin: 0;
-  color: var(--text);
   display: flex;
   align-items: center;
   justify-content: space-between;
+  background: var(--card-bg);
 }
 
-.view-all {
+.widget-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.widget-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  font-size: 1.1rem;
+  flex-shrink: 0;
+}
+
+.widget-title h3 {
+  font-size: 0.94rem;
+  font-weight: 700;
+  margin: 0;
+  color: var(--text);
+  letter-spacing: -0.01em;
+}
+
+.widget-title p {
+  margin: 2px 0 0;
+  font-size: 0.74rem;
+  color: var(--text-muted);
+}
+
+.widget-badge {
+  font-size: 0.76rem;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--primary-subtle);
   color: var(--primary);
-  text-decoration: none;
-  font-size: 0.78rem;
-  font-weight: 600;
-  white-space: nowrap;
+  border: 1px solid rgba(42, 157, 174, 0.2);
 }
 
-.view-all:hover {
-  text-decoration: underline;
+.view-all-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.76rem;
+  font-weight: 600;
+  padding: 5px 11px;
+  border-radius: 8px;
+  background: var(--input-bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  text-decoration: none;
+  transition: all 0.15s ease;
+}
+
+.view-all-btn:hover {
+  background: var(--primary);
+  color: #ffffff;
+  border-color: var(--primary);
+}
+
+/* Donut Container & Center Info */
+.donut .cv {
+  position: relative;
+  height: 240px;
+  margin: 12px 16px 6px;
+}
+
+.donut-center-info {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.donut-center-info b {
+  font-size: 1.85rem;
+  font-weight: 800;
+  color: var(--text);
+  line-height: 1;
+  letter-spacing: -0.03em;
+}
+
+.donut-center-info small {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-top: 2px;
+}
+
+.bhk-breakdown-chips {
+  padding: 12px 18px 16px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  border-top: 1px solid var(--border);
+  margin-top: auto;
+}
+
+.bhk-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  background: var(--input-bg);
+  border: 1px solid var(--border);
+  font-size: 0.76rem;
+  color: var(--text);
+}
+
+.chip-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+/* Feed Lists */
+.feed-list {
+  flex: 1;
+  overflow-y: auto;
 }
 
 .item {
   padding: 12px 18px;
   border-bottom: 1px solid var(--border);
-  font-size: 0.84rem;
-  display: grid;
-  gap: 2px;
-  background: #ffffff;
-  transition: background 0.15s ease;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--card-bg);
+  transition: all 0.18s ease;
+}
+
+.item:last-child {
+  border-bottom: none;
 }
 
 .item:hover {
-  background: #f8fafc;
+  background: var(--input-bg);
+  transform: translateX(3px);
 }
 
-.item b {
+.item-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, rgba(249, 115, 22, 0.15) 0%, rgba(249, 115, 22, 0.05) 100%);
+  color: #ea580c;
+  border: 1px solid rgba(249, 115, 22, 0.25);
+  font-weight: 700;
+  font-size: 0.92rem;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.item-avatar-enq {
+  background: linear-gradient(135deg, rgba(42, 157, 174, 0.18) 0%, rgba(42, 157, 174, 0.06) 100%);
+  color: var(--primary);
+  border-color: rgba(42, 157, 174, 0.25);
+}
+
+.item-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.item-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.item-name {
+  font-size: 0.88rem;
+  font-weight: 700;
   color: var(--text);
-  font-weight: 600;
-}
-
-.item small {
-  color: var(--text-muted);
-  font-size: 0.75rem;
-}
-
-.item span {
-  color: #4b5563;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 0.8rem;
+}
+
+.item-time {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  white-space: nowrap;
+  background: var(--input-bg);
+  padding: 2px 7px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+}
+
+.item-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.feed-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 6px;
+  white-space: nowrap;
+  max-width: 170px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.feed-tag.wa {
+  background: rgba(16, 185, 129, 0.1);
+  color: #059669;
+  border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.feed-tag.web {
+  background: rgba(100, 116, 139, 0.1);
+  color: #475569;
+  border: 1px solid rgba(100, 116, 139, 0.2);
+}
+
+.feed-tag.loc {
+  background: rgba(42, 157, 174, 0.1);
+  color: var(--primary);
+  border: 1px solid rgba(42, 157, 174, 0.2);
+}
+
+.feed-tag.budget {
+  background: rgba(202, 138, 4, 0.1);
+  color: #a16207;
+  border: 1px solid rgba(202, 138, 4, 0.2);
+}
+
+.feed-tag.bhk {
+  background: rgba(99, 102, 241, 0.1);
+  color: #4f46e5;
+  border: 1px solid rgba(99, 102, 241, 0.2);
+}
+
+.feed-phone {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .none {
@@ -1243,8 +1716,8 @@ header h1 {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 18px;
-  gap: 14px;
-  flex-wrap: wrap;
+  gap: 16px;
+  flex-wrap: nowrap;
 }
 
 .bar h2 {
@@ -1253,19 +1726,28 @@ header h1 {
   margin: 0 0 2px 0;
   color: var(--text);
   letter-spacing: -0.01em;
+  white-space: nowrap;
 }
 
 .bar p {
   margin: 0;
   font-size: 0.82rem;
   color: var(--text-muted);
+  line-height: 1.35;
+}
+
+.bar > div:first-child {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .bar .right {
   display: flex;
   gap: 10px;
   align-items: center;
-  flex-wrap: wrap;
+  flex-shrink: 0;
+  margin-left: auto;
+  justify-content: flex-end;
 }
 
 /* Inputs (#EEF1F0) */
@@ -1278,7 +1760,8 @@ header h1 {
   font-size: 0.88rem;
   font-weight: 500;
   color: var(--text);
-  min-width: 240px;
+  min-width: 180px;
+  width: 220px;
   outline: none;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -1673,6 +2156,10 @@ tr:hover td {
 }
 
 .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   border: 0;
   border-radius: 8px;
   padding: 9px 20px;
@@ -1680,6 +2167,32 @@ tr:hover td {
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s ease;
+}
+
+.btn i,
+.btn-save i,
+.btn-ghost i {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  line-height: 1;
+  margin-right: 2px;
+}
+
+.modal-foot .btn,
+.modal-foot button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.modal-foot .btn i,
+.modal-foot button i {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 2px;
 }
 
 .btn-ghost {
@@ -1977,10 +2490,17 @@ tr:hover td {
   .bar {
     flex-direction: column;
     align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .bar h2 {
+    white-space: normal;
   }
 
   .bar .right {
     width: 100%;
+    flex-wrap: wrap;
+    justify-content: flex-start;
   }
 
   .search {
@@ -2005,6 +2525,1240 @@ tr:hover td {
     grid-template-columns: 1fr;
   }
 }
+
+/* Calendly Bookings View & Automated Follow-up Elements */
+.calendly-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 16px 0;
+  align-items: center;
+}
+.calendly-pills .pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 15px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 600;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.calendly-pills .pill:hover {
+  border-color: #2A9DAE;
+  color: #2A9DAE;
+}
+.calendly-pills .pill.on {
+  background: #2A9DAE;
+  color: #ffffff;
+  border-color: #2A9DAE;
+  box-shadow: 0 2px 6px rgba(42, 157, 174, 0.25);
+}
+.dark-theme .calendly-pills .pill,
+[data-theme="dark"] .calendly-pills .pill {
+  background: #1e293b;
+  border-color: #334155;
+  color: #94a3b8;
+}
+.dark-theme .calendly-pills .pill:hover,
+[data-theme="dark"] .calendly-pills .pill:hover {
+  border-color: #38bdf8;
+  color: #38bdf8;
+}
+.dark-theme .calendly-pills .pill.on,
+[data-theme="dark"] .calendly-pills .pill.on {
+  background: #0284c7;
+  color: #ffffff;
+  border-color: #0284c7;
+}
+
+.badge-scheduled {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  background: rgba(16, 185, 129, 0.12);
+  color: #059669;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  white-space: nowrap;
+}
+.dark-theme .badge-scheduled,
+[data-theme="dark"] .badge-scheduled {
+  background: rgba(16, 185, 129, 0.2);
+  color: #34d399;
+  border-color: rgba(16, 185, 129, 0.4);
+}
+.badge-clicked {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  background: rgba(245, 158, 11, 0.12);
+  color: #d97706;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  white-space: nowrap;
+}
+.dark-theme .badge-clicked,
+[data-theme="dark"] .badge-clicked {
+  background: rgba(245, 158, 11, 0.2);
+  color: #fbbf24;
+  border-color: rgba(245, 158, 11, 0.4);
+}
+.badge-followup-stage {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  background: rgba(99, 102, 241, 0.12);
+  color: #4f46e5;
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  white-space: nowrap;
+}
+.dark-theme .badge-followup-stage,
+[data-theme="dark"] .badge-followup-stage {
+  background: rgba(99, 102, 241, 0.2);
+  color: #a5b4fc;
+  border-color: rgba(99, 102, 241, 0.4);
+}
+.badge-crm-deleted {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  background: rgba(100, 116, 139, 0.14);
+  color: #64748b;
+  border: 1px solid rgba(100, 116, 139, 0.3);
+  white-space: nowrap;
+}
+.dark-theme .badge-crm-deleted,
+[data-theme="dark"] .badge-crm-deleted {
+  background: rgba(100, 116, 139, 0.25);
+  color: #cbd5e1;
+  border-color: rgba(100, 116, 139, 0.4);
+}
+.badge-overdue {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 700;
+  background: rgba(220, 38, 38, 0.12);
+  color: #dc2626;
+  border: 1px solid rgba(220, 38, 38, 0.35);
+  white-space: nowrap;
+}
+.dark-theme .badge-overdue,
+[data-theme="dark"] .badge-overdue {
+  background: rgba(220, 38, 38, 0.25);
+  color: #f87171;
+  border-color: rgba(220, 38, 38, 0.5);
+}
+.btn-followup {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  border: none;
+  background: #2A9DAE;
+  color: #ffffff;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 3px rgba(42, 157, 174, 0.3);
+  white-space: nowrap;
+}
+.btn-followup i {
+  display: inline-flex;
+  align-items: center;
+  font-size: 13px;
+  line-height: 1;
+  margin-right: 2px;
+}
+.btn-followup:hover:not(:disabled) {
+  background: #238391;
+  transform: translateY(-1px);
+  box-shadow: 0 3px 6px rgba(42, 157, 174, 0.4);
+}
+.btn-followup:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.btn-followup.sending {
+  pointer-events: none;
+  opacity: 0.7;
+}
+.btn-followup.stage-3 {
+  background: #e11d48;
+}
+.btn-followup.stage-3:hover:not(:disabled) {
+  background: #be123c;
+}
+.appt-date-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-weight: 600;
+  color: #059669;
+  background: rgba(16, 185, 129, 0.08);
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.dark-theme .appt-date-badge,
+[data-theme="dark"] .appt-date-badge {
+  color: #34d399;
+  background: rgba(16, 185, 129, 0.16);
+}
+.timeline-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  background: #f1f5f9;
+  color: #334155;
+  border: 1px solid #cbd5e1;
+  white-space: nowrap;
+}
+.dark-theme .timeline-badge,
+[data-theme="dark"] .timeline-badge {
+  background: #1e293b;
+  color: #e2e8f0;
+  border-color: #475569;
+}
+.timeline-badge.urgent {
+  background: rgba(239, 68, 68, 0.1);
+  color: #dc2626;
+  border-color: rgba(239, 68, 68, 0.3);
+}
+.dark-theme .timeline-badge.urgent,
+[data-theme="dark"] .timeline-badge.urgent {
+  background: rgba(239, 68, 68, 0.2);
+  color: #f87171;
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+/* ==========================================================================
+   SNAPPD MODERN 2-COLUMN DASHBOARD STYLES (PROFILENT BRAND THEME)
+   ========================================================================== */
+
+/* Sidebar Enhancements */
+.side {
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+.side::-webkit-scrollbar {
+  width: 4px;
+}
+.side::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 4px;
+}
+
+.sidebar-section-title {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0 14px;
+  margin: 18px 0 8px 0;
+}
+
+.side nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.side nav a {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  color: var(--text-muted);
+  text-decoration: none;
+  font-size: 0.88rem;
+  font-weight: 500;
+  border-radius: 12px;
+  transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.side nav a:hover {
+  background: var(--primary-subtle);
+  color: var(--primary);
+}
+.side nav a.on {
+  background: rgba(42, 157, 174, 0.12) !important;
+  color: var(--primary) !important;
+  font-weight: 600 !important;
+  box-shadow: none !important;
+}
+.side nav a.on i {
+  color: var(--primary) !important;
+}
+[data-theme="dark"] .side nav a.on {
+  background: rgba(42, 157, 174, 0.2) !important;
+  color: #38bdf8 !important;
+}
+[data-theme="dark"] .side nav a.on i {
+  color: #38bdf8 !important;
+}
+
+.nav-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+  margin-left: auto;
+  line-height: 1.2;
+}
+.nav-badge.red {
+  background: #EF4444;
+  color: #FFFFFF;
+}
+.nav-badge.dark {
+  background: #0F172A;
+  color: #FFFFFF;
+}
+[data-theme="dark"] .nav-badge.dark {
+  background: #334155;
+  color: #F8FAFC;
+}
+
+.side-tools {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 20px;
+}
+.side-tool-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 14px;
+  color: var(--text-muted);
+  text-decoration: none;
+  font-size: 0.86rem;
+  font-weight: 500;
+  border-radius: 12px;
+  transition: all 0.18s ease;
+}
+.side-tool-link:hover {
+  background: var(--primary-subtle);
+  color: var(--primary);
+}
+
+.sidebar-stream-box {
+  margin-top: auto;
+  margin-bottom: 0;
+  padding: 14px 16px;
+  background: #F8FAFC;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+}
+[data-theme="dark"] .sidebar-stream-box {
+  background: #111A2C;
+  border-color: #1E293B;
+}
+.sidebar-stream-box .stream-title {
+  display: block;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+.sidebar-stream-box .stream-val {
+  display: block;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.02em;
+  margin-bottom: 6px;
+}
+.sidebar-stream-box .stream-trend {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--primary);
+}
+.sidebar-stream-box .stream-sub {
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.header-user-pill {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 14px;
+  border-radius: 12px;
+  background: #F8FAFC;
+  border: 1px solid var(--border);
+}
+[data-theme="dark"] .header-user-pill {
+  background: #111A2C;
+  border-color: #1E293B;
+}
+.header-user-pill .user-pill-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--primary-subtle);
+  color: var(--primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.05rem;
+}
+.header-user-pill .user-pill-name {
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.2;
+}
+.header-user-pill .user-pill-email {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+/* Header Enhancements */
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  min-height: 74px;
+  padding: 14px clamp(16px, 2.5vw, 32px);
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 40;
+}
+[data-theme="dark"] header {
+  background: rgba(11, 19, 43, 0.94) !important;
+  border-bottom-color: #1E293B !important;
+}
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.header-left h1 {
+  font-size: 1.55rem;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+.header-subtitle {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  margin: 2px 0 0 0;
+  font-weight: 400;
+}
+
+.header-center {
+  flex: 1;
+  max-width: 360px;
+  margin: 0 auto;
+}
+.header-search-pill {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+.header-search-field {
+  width: 100%;
+  background: #F1F5F9;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  padding: 9px 46px 9px 18px;
+  font-size: 0.86rem;
+  color: var(--text);
+  outline: none;
+  transition: all 0.2s ease;
+}
+.header-search-field:focus {
+  background: #FFFFFF;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-subtle);
+}
+[data-theme="dark"] .header-search-field {
+  background: #111A2C;
+  color: #F8FAFC;
+  border-color: #1E293B;
+}
+[data-theme="dark"] .header-search-field:focus {
+  border-color: var(--primary);
+}
+.header-search-icon-btn {
+  position: absolute;
+  right: 5px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(42, 157, 174, 0.12);
+  color: var(--primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+.header-search-icon-btn:hover {
+  background: var(--primary);
+  color: #ffffff;
+  transform: scale(1.05);
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.header-round-btn {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--card-bg);
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.05rem;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+.header-round-btn:hover {
+  background: var(--primary-subtle);
+  color: var(--primary);
+  border-color: var(--primary);
+}
+.bell-alert-dot {
+  position: absolute;
+  top: 9px;
+  right: 10px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #EF4444;
+  border: 1.5px solid var(--card-bg);
+}
+
+/* Snappd 2-Column Dashboard Grid */
+.snappd-grid {
+  display: grid;
+  grid-template-columns: 1.85fr 1fr;
+  gap: 24px;
+  align-items: start;
+}
+@media (max-width: 1200px) {
+  .snappd-grid {
+    grid-template-columns: 1fr;
+  }
+}
+.snappd-col-left {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+.snappd-col-right {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* Base Card Style */
+.snappd-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 24px;
+  box-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.04);
+  position: relative;
+}
+[data-theme="dark"] .snappd-card {
+  background: #111A2C !important;
+  border-color: #1E293B !important;
+  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.25);
+}
+
+.snappd-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.snappd-card-header.no-border {
+  margin-bottom: 16px;
+}
+.snappd-card-header .card-title {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+/* Timeframe Pill */
+.date-dropdown-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  background: #F8FAFC;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.date-dropdown-pill:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+[data-theme="dark"] .date-dropdown-pill {
+  background: #162238;
+  border-color: #1E293B;
+  color: #94A3B8;
+}
+
+/* Analytics Stat Row (3 Pills) */
+.analytics-stat-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  margin-bottom: 24px;
+}
+@media (max-width: 680px) {
+  .analytics-stat-row {
+    grid-template-columns: 1fr;
+  }
+}
+.analytics-pill-box {
+  background: #FFFFFF;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+}
+[data-theme="dark"] .analytics-pill-box {
+  background: #162238;
+  border-color: #1E293B;
+}
+.pill-box-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+.dot-indicator {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.dot-navy { background: #0F2744; }
+.dot-teal { background: #2A9DAE; }
+[data-theme="dark"] .dot-navy { background: #38BDF8; }
+
+.pill-box-main {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 2px;
+}
+.pill-box-val {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.02em;
+}
+.pill-box-val.val-purple {
+  color: #2A9DAE;
+}
+.pill-box-badge {
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 6px;
+  line-height: 1;
+}
+.badge-green {
+  background: rgba(34, 197, 94, 0.12);
+  color: #16A34A;
+}
+[data-theme="dark"] .badge-green {
+  background: rgba(34, 197, 94, 0.22);
+  color: #4ADE80;
+}
+.pill-box-sub {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+.analytics-chart-container {
+  height: 250px;
+  position: relative;
+  width: 100%;
+}
+
+/* Sub-row: Financial Overview + Customer By Time */
+.snappd-row-sub {
+  display: grid;
+  grid-template-columns: 1fr 1.35fr;
+  gap: 20px;
+}
+@media (max-width: 900px) {
+  .snappd-row-sub {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Financial Overview Stack */
+.fin-tiles-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.fin-tile {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 11px 14px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: #FAFCFE;
+  transition: all 0.15s ease;
+}
+[data-theme="dark"] .fin-tile {
+  background: #162238;
+  border-color: #1E293B;
+}
+.fin-tile-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.fin-tile-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: rgba(42, 157, 174, 0.1);
+  color: var(--primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.95rem;
+}
+.fin-tile-text {
+  display: flex;
+  flex-direction: column;
+}
+.fin-tile-label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+.fin-tile-num {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.2;
+}
+.fin-chevron {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+/* Featured Dark Navy Card */
+.fin-tile-dark {
+  background: #0F2744;
+  color: #FFFFFF;
+  border-radius: 16px;
+  padding: 14px 16px;
+  box-shadow: 0 4px 16px rgba(15, 39, 68, 0.25);
+}
+[data-theme="dark"] .fin-tile-dark {
+  background: #081628;
+  border: 1px solid #1E3A5F;
+}
+.fin-dark-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.78rem;
+  color: #94A3B8;
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+.fin-dark-slider-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.slider-boundary {
+  font-size: 0.75rem;
+  color: #64748B;
+  font-weight: 600;
+}
+.slider-center-val {
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: #FFFFFF;
+  letter-spacing: -0.02em;
+}
+.fin-dark-ticks {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 3px;
+  height: 22px;
+}
+.tick-bar {
+  flex: 1;
+  height: 10px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+.tick-bar.tick-active {
+  height: 22px;
+  background: #FFFFFF;
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.8);
+}
+
+/* Customer By Time Card */
+.view-all-link {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--primary);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  letter-spacing: 0.04em;
+}
+.view-all-link:hover {
+  text-decoration: underline;
+}
+
+.customer-counters-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-bottom: 18px;
+}
+.customer-counter-card {
+  background: #FAFCFE;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 8px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+[data-theme="dark"] .customer-counter-card {
+  background: #162238;
+  border-color: #1E293B;
+}
+.counter-icon-wrap {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: rgba(42, 157, 174, 0.1);
+  color: var(--primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+  margin-bottom: 4px;
+}
+.counter-num {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: var(--text);
+  line-height: 1.2;
+}
+.counter-desc {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  line-height: 1.2;
+  margin-top: 2px;
+}
+
+/* Heatmap Grid */
+.heatmap-wrap {
+  margin-top: 8px;
+}
+.heatmap-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.heatmap-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.heatmap-day-label {
+  width: 28px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-align: left;
+}
+.heatmap-cells {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(11, 1fr);
+  gap: 5px;
+}
+.heatmap-cell {
+  height: 12px;
+  border-radius: 6px;
+  transition: transform 0.15s ease, filter 0.15s ease;
+  cursor: pointer;
+}
+.heatmap-cell:hover {
+  transform: scale(1.15);
+  filter: brightness(1.1);
+}
+.heatmap-cell.level-1 {
+  background: rgba(42, 157, 174, 0.15);
+}
+.heatmap-cell.level-2 {
+  background: rgba(42, 157, 174, 0.45);
+}
+.heatmap-cell.level-3 {
+  background: #2A9DAE;
+}
+[data-theme="dark"] .heatmap-cell.level-1 {
+  background: rgba(42, 157, 174, 0.2);
+}
+[data-theme="dark"] .heatmap-cell.level-2 {
+  background: rgba(42, 157, 174, 0.55);
+}
+[data-theme="dark"] .heatmap-cell.level-3 {
+  background: #2A9DAE;
+  box-shadow: 0 0 6px rgba(42, 157, 174, 0.4);
+}
+
+/* RIGHT COLUMN: Overall Summary Progress Card */
+.summary-subtitle {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin: 4px 0 0 0;
+  line-height: 1.4;
+}
+.progress-stats-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 10px;
+}
+.progress-stat-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.progress-stat-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.progress-stat-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.progress-stat-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.95rem;
+}
+.icon-teal {
+  background: rgba(42, 157, 174, 0.12);
+  color: #2A9DAE;
+}
+.icon-navy {
+  background: rgba(15, 39, 68, 0.1);
+  color: #0F2744;
+}
+[data-theme="dark"] .icon-navy {
+  background: rgba(56, 189, 248, 0.15);
+  color: #38BDF8;
+}
+.icon-teal-light {
+  background: rgba(42, 157, 174, 0.18);
+  color: #178393;
+}
+
+.progress-stat-title {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.2;
+}
+.progress-stat-sub {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+.progress-stat-target {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.progress-bar-track {
+  width: 100%;
+  height: 8px;
+  background: #F1F5F9;
+  border-radius: 999px;
+  overflow: hidden;
+}
+[data-theme="dark"] .progress-bar-track {
+  background: #1E293B;
+}
+.progress-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.fill-teal {
+  background: #2A9DAE;
+}
+.fill-navy {
+  background: #0F2744;
+}
+[data-theme="dark"] .fill-navy {
+  background: #38BDF8;
+}
+.fill-teal-light {
+  background: #4ec0d1;
+}
+
+.progress-stat-footer {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+.progress-pct-text {
+  font-weight: 700;
+  color: var(--text);
+}
+
+/* RIGHT COLUMN: Pipeline Overview Card */
+.pipeline-pill-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  border-radius: 12px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+.pill-mint {
+  background: rgba(42, 157, 174, 0.12);
+  color: #178393;
+}
+[data-theme="dark"] .pill-mint {
+  background: rgba(42, 157, 174, 0.22);
+  color: #4EC0D1;
+}
+.pill-light {
+  background: #F8FAFC;
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+[data-theme="dark"] .pill-light {
+  background: #162238;
+  border-color: #1E293B;
+  color: #F8FAFC;
+}
+
+.pipeline-metrics-trio {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  padding: 14px 0;
+  border-top: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-subtle);
+  margin: 14px 0;
+  text-align: center;
+}
+.metric-trio-col {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.metric-trio-col.border-center {
+  border-left: 1px solid var(--border-subtle);
+  border-right: 1px solid var(--border-subtle);
+}
+.trio-label {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+.trio-val {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text);
+}
+.trio-val.trio-huge {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.pipeline-total-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+.pipeline-action-btns {
+  display: flex;
+  gap: 8px;
+}
+.pipeline-action-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: #FAFCFE;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.pipeline-action-btn:hover {
+  background: var(--primary-subtle);
+  color: var(--primary);
+  border-color: var(--primary);
+}
+[data-theme="dark"] .pipeline-action-btn {
+  background: #162238;
+  border-color: #1E293B;
+  color: #94A3B8;
+}
+.pipeline-total-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+.total-label {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+.total-amount {
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: var(--text);
+  letter-spacing: -0.02em;
+}
+
+/* Feature Dark Bottom Banner */
+.pipeline-dark-banner {
+  background: #0F2744;
+  color: #FFFFFF;
+  border-radius: 16px;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.pipeline-dark-banner:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(15, 39, 68, 0.3);
+}
+[data-theme="dark"] .pipeline-dark-banner {
+  background: #081628;
+  border: 1px solid #1E3A5F;
+}
+.dark-banner-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #FFFFFF;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+.dark-banner-text {
+  flex: 1;
+  font-size: 0.75rem;
+  line-height: 1.3;
+}
+.dark-banner-arrow {
+  font-size: 1.25rem;
+  color: #94A3B8;
+}
+
 </style>
 </head>
 <body>
@@ -2020,23 +3774,51 @@ tr:hover td {
       </div>
     </a>
   </div>
-  <div class="group"><i class="bi bi-speedometer2"></i> CRM Dashboard <i class="bi bi-chevron-up ms-auto" style="margin-left:auto"></i></div>
+
+  <div class="sidebar-section-title">MAIN MENU</div>
   <nav>
-    <a href="#dashboard" data-view="dashboard"><i class="bi bi-grid-1x2-fill"></i> Overview</a>
-    <a href="#all" data-view="all"><i class="bi bi-people-fill"></i> All Leads</a>
-    <a href="#upsert" data-view="upsert"><i class="bi bi-layers-fill"></i> Upsert Leads</a>
+    <a href="#dashboard" data-view="dashboard"><i class="bi bi-check2-square"></i> Dashboard</a>
+    <a href="#all" data-view="all"><i class="bi bi-bar-chart-line-fill"></i> All Leads</a>
+    <a href="#upsert" data-view="upsert"><i class="bi bi-receipt"></i> Upsert Leads</a>
+    <a href="#calendly" data-view="calendly"><i class="bi bi-calendar2-check"></i> Calendly Bookings <span class="nav-badge red" id="sideNavCalBadge">9</span></a>
     <a href="#contact" data-view="contact"><i class="bi bi-person-lines-fill"></i> Contact Us Leads</a>
-    <a href="#enquiries" data-view="enquiries"><i class="bi bi-house-heart"></i> Property Enquiries</a>
-    <a href="#conversations" data-view="conversations"><i class="bi bi-whatsapp"></i> Property Conversations</a>
+    <a href="#enquiries" data-view="enquiries"><i class="bi bi-house-door"></i> Property Enquiries</a>
+    <a href="#conversations" data-view="conversations"><i class="bi bi-chat-left-dots"></i> Conversations <span class="nav-badge dark" id="sideNavConvBadge">25</span></a>
   </nav>
+
+  <div class="sidebar-section-title">GENERAL TOOLS</div>
+  <div class="side-tools">
+    <a href="#dashboard" class="side-tool-link" onclick="event.preventDefault();"><i class="bi bi-gear"></i> Settings</a>
+    <a href="mailto:support@profilent.com" class="side-tool-link"><i class="bi bi-question-circle"></i> Help Center</a>
+    <a href="#logout" class="side-tool-link" id="sideLogoutLink"><i class="bi bi-box-arrow-right"></i> Logout</a>
+  </div>
+
+  <div class="sidebar-stream-box">
+    <span class="stream-title">Property Deals Pipeline</span>
+    <b class="stream-val" id="sideStreamVal">₹ 24.5 Cr</b>
+    <div class="stream-trend"><i class="bi bi-arrow-up-short"></i> 18.5% <span class="stream-sub">Pipeline Growth</span></div>
+  </div>
 </aside>
 <div class="side-backdrop" id="sideBackdrop" hidden></div>
 
 <main>
   <header>
-    <button type="button" class="mobile-toggle" id="menuToggle" aria-label="Toggle menu"><i class="bi bi-list"></i></button>
-    <h1 id="title">Enquiries Dashboard</h1>
-    <div class="admin">
+    <div class="header-left">
+      <button type="button" class="mobile-toggle" id="menuToggle" aria-label="Toggle menu"><i class="bi bi-list"></i></button>
+      <div>
+        <h1 id="title">Dashboard</h1>
+        <p class="header-subtitle" id="headerSubtitle">Let's see what we've got for you today</p>
+      </div>
+    </div>
+    
+    <div class="header-center">
+      <div class="header-search-pill">
+        <input type="text" class="header-search-field" id="globalHeaderSearch" placeholder="Search Anything...">
+        <button type="button" class="header-search-icon-btn" aria-label="Search"><i class="bi bi-search"></i></button>
+      </div>
+    </div>
+
+    <div class="header-actions">
       <!-- Day (Light) / Night (Dark) Toggle -->
       <button type="button" class="day-night-toggle" id="dayNightToggle" aria-label="Toggle day and night mode" role="switch" aria-checked="false" title="Switch between Day and Night mode">
         <span class="toggle-track">
@@ -2057,24 +3839,329 @@ tr:hover td {
         </span>
       </button>
 
-      <button class="logout" id="logoutBtn"><i class="bi bi-box-arrow-right"></i> Logout</button>
-      <span class="avatar"><i class="bi bi-person-fill"></i></span><div><b>Admin</b><small>Administrator</small></div>
+      <!-- Admin section moved from sidebar to navbar -->
+      <div class="header-user-pill">
+        <div class="user-pill-avatar"><i class="bi bi-person-fill"></i></div>
+        <div class="user-pill-info">
+          <div class="user-pill-name">Admin</div>
+          <div class="user-pill-email">admin@profilent.com</div>
+        </div>
+      </div>
     </div>
   </header>
   <div class="err" id="err" hidden>Could not load data. Check that the server and MongoDB are running, then refresh.</div>
 
-  <section class="panel" id="view-dashboard">
-    <div class="top">
-      <div><h2>Today's Enquiries</h2><p>Lead Summary</p></div>
-      <div style="display:flex;align-items:center;gap:10px;">
-        <span class="total" id="total">Total: 0</span>
+  <section class="panel dashboard-panel" id="view-dashboard">
+    <div class="snappd-grid">
+      
+      <!-- LEFT COLUMN (~65% width) -->
+      <div class="snappd-col-left">
+        
+        <!-- CARD 1: Lead Analytics for Property Sales -->
+        <div class="snappd-card card-analytics">
+          <div class="snappd-card-header">
+            <h3 class="card-title">Lead Analytics for Property Sales</h3>
+            <div class="date-dropdown-pill" title="Filter timeframe">
+              <i class="bi bi-calendar3"></i>
+              <span>This Month</span>
+              <i class="bi bi-chevron-down"></i>
+            </div>
+          </div>
+
+          <!-- 3 Stat Pills -->
+          <div class="analytics-stat-row">
+            <div class="analytics-pill-box">
+              <div class="pill-box-header">
+                <span class="dot-indicator dot-navy"></span>
+                <span class="pill-box-label">Property Leads</span>
+              </div>
+              <div class="pill-box-main">
+                <span class="pill-box-val" id="analyticsRevVal">248</span>
+                <span class="pill-box-badge badge-green">+18.4% <i class="bi bi-arrow-up-short"></i></span>
+              </div>
+              <div class="pill-box-sub">Total Buyer Inquiries</div>
+            </div>
+
+            <div class="analytics-pill-box">
+              <div class="pill-box-header">
+                <span class="dot-indicator dot-teal"></span>
+                <span class="pill-box-label">Qualified Hot Leads</span>
+              </div>
+              <div class="pill-box-main">
+                <span class="pill-box-val" id="analyticsExpVal">86</span>
+                <span class="pill-box-badge badge-green">+12.5% <i class="bi bi-arrow-up-short"></i></span>
+              </div>
+              <div class="pill-box-sub">High-Intent Buyers</div>
+            </div>
+
+            <div class="analytics-pill-box">
+              <div class="pill-box-header">
+                <span class="pill-box-label">Conversion Rate</span>
+              </div>
+              <div class="pill-box-main">
+                <span class="pill-box-val val-purple" id="analyticsProfitVal">+67%</span>
+              </div>
+              <div class="pill-box-sub">Inquiry to Consultation</div>
+            </div>
+          </div>
+
+          <!-- Dual Bar Chart -->
+          <div class="analytics-chart-container">
+            <canvas id="revenueBarChart"></canvas>
+          </div>
+        </div>
+
+        <!-- ROW 2: Buyer Intent & Engagement -->
+        <div class="snappd-row-sub">
+          
+          <!-- SUB-CARD A: Buyer Intent & Qualification -->
+          <div class="snappd-card card-financial">
+            <div class="snappd-card-header">
+              <h3 class="card-title">Buyer Intent &amp; Qualification</h3>
+            </div>
+
+            <div class="fin-tiles-stack">
+              <!-- Tile 1 -->
+              <div class="fin-tile">
+                <div class="fin-tile-left">
+                  <span class="fin-tile-icon"><i class="bi bi-lightning-charge-fill"></i></span>
+                  <div class="fin-tile-text">
+                    <span class="fin-tile-label">Immediate Buyers (&lt; 1 Mo)</span>
+                    <span class="fin-tile-num" id="leadImmediateVal">38</span>
+                  </div>
+                </div>
+                <i class="bi bi-chevron-down fin-chevron"></i>
+              </div>
+
+              <!-- Tile 2 -->
+              <div class="fin-tile">
+                <div class="fin-tile-left">
+                  <span class="fin-tile-icon"><i class="bi bi-cash-coin"></i></span>
+                  <div class="fin-tile-text">
+                    <span class="fin-tile-label">Full Cash Buyers</span>
+                    <span class="fin-tile-num" id="leadCashVal">24</span>
+                  </div>
+                </div>
+                <i class="bi bi-chevron-down fin-chevron"></i>
+              </div>
+
+              <!-- Tile 3: Featured Dark Navy Card with visual slider -->
+              <div class="fin-tile-dark">
+                <div class="fin-dark-head">
+                  <span>Lead Intent &amp; Quality Index</span>
+                  <i class="bi bi-chevron-up"></i>
+                </div>
+                <div class="fin-dark-slider-row">
+                  <span class="slider-boundary">0</span>
+                  <div class="slider-center-val" id="leadAvgScoreVal">88.5</div>
+                  <span class="slider-boundary">100</span>
+                </div>
+                <!-- Visual tick slider -->
+                <div class="fin-dark-ticks">
+                  <span class="tick-bar"></span>
+                  <span class="tick-bar"></span>
+                  <span class="tick-bar"></span>
+                  <span class="tick-bar"></span>
+                  <span class="tick-bar"></span>
+                  <span class="tick-bar tick-active"></span>
+                  <span class="tick-bar"></span>
+                  <span class="tick-bar"></span>
+                  <span class="tick-bar"></span>
+                  <span class="tick-bar"></span>
+                  <span class="tick-bar"></span>
+                </div>
+              </div>
+
+              <!-- Tile 4 -->
+              <div class="fin-tile">
+                <div class="fin-tile-left">
+                  <span class="fin-tile-icon"><i class="bi bi-gem"></i></span>
+                  <div class="fin-tile-text">
+                    <span class="fin-tile-label">High Budget (1 Cr+)</span>
+                    <span class="fin-tile-num" id="leadHighBudgetVal">19</span>
+                  </div>
+                </div>
+                <i class="bi bi-chevron-down fin-chevron"></i>
+              </div>
+            </div>
+          </div>
+
+          <!-- SUB-CARD B: Buyer Activity & Engagement -->
+          <div class="snappd-card card-customer-time">
+            <div class="snappd-card-header">
+              <h3 class="card-title">Buyer Activity &amp; Engagement</h3>
+              <a href="#conversations" class="view-all-link">VIEW ALL <i class="bi bi-arrow-right"></i></a>
+            </div>
+
+            <!-- 3 Circular Metrics -->
+            <div class="customer-counters-row">
+              <div class="customer-counter-card">
+                <div class="counter-icon-wrap"><i class="bi bi-calendar2-check-fill"></i></div>
+                <div class="counter-num">94</div>
+                <div class="counter-desc">Consultations Scheduled</div>
+              </div>
+
+              <div class="customer-counter-card">
+                <div class="counter-icon-wrap"><i class="bi bi-whatsapp"></i></div>
+                <div class="counter-num">78</div>
+                <div class="counter-desc">WhatsApp Chats Active</div>
+              </div>
+
+              <div class="customer-counter-card">
+                <div class="counter-icon-wrap"><i class="bi bi-check2-circle"></i></div>
+                <div class="counter-num">89</div>
+                <div class="counter-desc">Follow-ups Dispatched</div>
+              </div>
+            </div>
+
+            <!-- Heatmap Activity Grid -->
+            <div class="heatmap-wrap">
+              <div class="heatmap-grid" id="heatmapGrid"></div>
+            </div>
+          </div>
+
+        </div>
+
       </div>
-    </div>
-    <div class="cards" id="cards"></div>
-    <div class="grid2">
-      <div class="donut"><h3>Property Enquiries by BHK Preference</h3><div class="cv"><canvas id="chart"></canvas></div><p class="none" id="chartEmpty" hidden>No record found</p></div>
-      <div class="box"><h3>Latest Contact Us Leads <a class="view-all" href="#contact">View all →</a></h3><div id="latestContact"></div></div>
-      <div class="box"><h3>Latest Property Enquiries <a class="view-all" href="#enquiries">View all →</a></h3><div id="latestEnq"></div></div>
+
+      <!-- RIGHT COLUMN (~35% width) -->
+      <div class="snappd-col-right">
+
+        <!-- CARD 3: Property Sales Targets & Goals -->
+        <div class="snappd-card card-summary-progress">
+          <div class="snappd-card-header no-border">
+            <div>
+              <h3 class="card-title">Property Sales Targets</h3>
+              <p class="summary-subtitle">Achieved 88% of quarterly property sales, site visits &amp; qualification targets</p>
+            </div>
+          </div>
+
+          <div class="progress-stats-stack">
+            <!-- Progress Item 1 -->
+            <div class="progress-stat-item">
+              <div class="progress-stat-header">
+                <div class="progress-stat-title-wrap">
+                  <span class="progress-stat-icon icon-teal"><i class="bi bi-building"></i></span>
+                  <div>
+                    <div class="progress-stat-title">Property Deals Closed</div>
+                    <div class="progress-stat-sub">Quarterly Sales Target: ₹ 5.0 Cr</div>
+                  </div>
+                </div>
+                <div class="progress-stat-target">₹ 4.4 Cr</div>
+              </div>
+              <div class="progress-bar-track">
+                <div class="progress-bar-fill fill-teal" style="width: 88%;"></div>
+              </div>
+              <div class="progress-stat-footer">
+                <span class="progress-status-text">Target On-Track</span>
+                <span class="progress-pct-text">88%</span>
+              </div>
+            </div>
+
+            <!-- Progress Item 2 -->
+            <div class="progress-stat-item">
+              <div class="progress-stat-header">
+                <div class="progress-stat-title-wrap">
+                  <span class="progress-stat-icon icon-navy"><i class="bi bi-calendar2-week-fill"></i></span>
+                  <div>
+                    <div class="progress-stat-title">Site Visit Bookings</div>
+                    <div class="progress-stat-sub">Calendly Consultations</div>
+                  </div>
+                </div>
+                <div class="progress-stat-target">90%</div>
+              </div>
+              <div class="progress-bar-track">
+                <div class="progress-bar-fill fill-navy" style="width: 90%;"></div>
+              </div>
+              <div class="progress-stat-footer">
+                <span class="progress-status-text">Above Target</span>
+                <span class="progress-pct-text">90%</span>
+              </div>
+            </div>
+
+            <!-- Progress Item 3 -->
+            <div class="progress-stat-item">
+              <div class="progress-stat-header">
+                <div class="progress-stat-title-wrap">
+                  <span class="progress-stat-icon icon-teal-light"><i class="bi bi-send-check-fill"></i></span>
+                  <div>
+                    <div class="progress-stat-title">Automated Follow-ups</div>
+                    <div class="progress-stat-sub">Day 1/3/7 Nurturing Cycles</div>
+                  </div>
+                </div>
+                <div class="progress-stat-target">72%</div>
+              </div>
+              <div class="progress-bar-track">
+                <div class="progress-bar-fill fill-teal-light" style="width: 72%;"></div>
+              </div>
+              <div class="progress-stat-footer">
+                <span class="progress-status-text">Active Cycles</span>
+                <span class="progress-pct-text">72%</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- CARD 4: Pipeline Overview & Zoho Sync -->
+        <div class="snappd-card card-pipeline-overview">
+          <div class="snappd-card-header no-border">
+            <h3 class="card-title">Pipeline &amp; Zoho CRM Sync</h3>
+          </div>
+
+          <!-- Mint Pill Row -->
+          <div class="pipeline-pill-row pill-mint">
+            <span>Hot Leads Pipeline</span>
+            <b>₹ 18.5 Cr</b>
+          </div>
+
+          <!-- Light Pill Row -->
+          <div class="pipeline-pill-row pill-light">
+            <span>Zoho CRM Integration</span>
+            <b>Connected &amp; Synced</b>
+          </div>
+
+          <!-- 3 Stats Trio -->
+          <div class="pipeline-metrics-trio">
+            <div class="metric-trio-col">
+              <span class="trio-label">New Inquiries</span>
+              <span class="trio-val" id="pipelineNewTodayVal">14</span>
+            </div>
+            <div class="metric-trio-col border-center">
+              <span class="trio-label">Zoho Sync</span>
+              <span class="trio-val trio-huge">100%</span>
+            </div>
+            <div class="metric-trio-col">
+              <span class="trio-label">Hot Rate</span>
+              <span class="trio-val" id="pipelineHotRateVal">38%</span>
+            </div>
+          </div>
+
+          <!-- Total Amount Row -->
+          <div class="pipeline-total-row">
+            <div class="pipeline-action-btns">
+              <button type="button" class="pipeline-action-btn" title="View Property Enquiries" onclick="location.hash='#enquiries'"><i class="bi bi-house-door"></i></button>
+              <button type="button" class="pipeline-action-btn" title="View Calendly Consultations" onclick="location.hash='#calendly'"><i class="bi bi-calendar2-check"></i></button>
+            </div>
+            <div class="pipeline-total-right">
+              <span class="total-label">Active Property Pipeline</span>
+              <span class="total-amount">₹ 24,56,000</span>
+            </div>
+          </div>
+
+          <!-- Bottom Feature Dark Banner -->
+          <div class="pipeline-dark-banner" onclick="location.hash='#calendly'">
+            <div class="dark-banner-icon">
+              <i class="bi bi-shield-check"></i>
+            </div>
+            <div class="dark-banner-text">
+              <b>Monitor Real-time Property Leads, AI Qualification &amp; Automated Follow-ups</b>
+            </div>
+            <i class="bi bi-arrow-right-short dark-banner-arrow"></i>
+          </div>
+        </div>
+
+      </div>
+
     </div>
   </section>
 
@@ -2103,6 +4190,28 @@ tr:hover td {
       <div class="tw" id="upsertLeadsTable"></div>
       <button type="button" class="floating-scroll-btn scroll-right" data-target="#upsertLeadsTable" data-dir="1" title="Scroll Right"><i class="bi bi-chevron-right"></i></button>
       <button type="button" class="floating-scroll-btn scroll-left" data-target="#upsertLeadsTable" data-dir="-1" title="Scroll Left" hidden><i class="bi bi-chevron-left"></i></button>
+    </div>
+  </section>
+
+  <section class="panel" id="view-calendly" hidden>
+    <div class="bar"><div><h2>Calendly Bookings &amp; Follow-ups</h2><p>Hot Leads consultation appointments, booking tracking, Day 1/3/7 follow-ups &amp; 7th-day salesperson call alerts</p></div>
+      <div class="right">
+        <button type="button" class="btn-dash-refresh" id="btnSyncCalendly" title="Sync latest appointments directly from Calendly API"><i class="bi bi-arrow-repeat"></i> Sync Calendly</button>
+        <input class="search" placeholder="Search Calendly leads...">
+        <button type="button" class="delbtn-top" id="delSelectedCalendly" disabled title="Select leads using checkboxes to delete from Zoho CRM &amp; Database"><i class="bi bi-trash3"></i></button>
+      </div>
+    </div>
+    <div class="calendly-pills" id="calendlyFilterPills">
+      <button type="button" class="pill on" data-filter="all"><i class="bi bi-fire"></i> All Hot Leads (<span id="countCalAll">0</span>)</button>
+      <button type="button" class="pill" data-filter="scheduled"><i class="bi bi-calendar-check-fill"></i> Lead Booked (<span id="countCalScheduled">0</span>)</button>
+      <button type="button" class="pill" data-filter="clicked"><i class="bi bi-cursor-fill"></i> Clicked / Pending (<span id="countCalClicked">0</span>)</button>
+      <button type="button" class="pill" data-filter="followup"><i class="bi bi-envelope-check-fill"></i> Follow-up Sent (<span id="countCalFollowup">0</span>)</button>
+      <button type="button" class="pill" data-filter="overdue"><i class="bi bi-telephone-exclamation-fill"></i> 7+ Days Overdue / Call (<span id="countCalOverdue">0</span>)</button>
+    </div>
+    <div class="tw-container">
+      <div class="tw" id="calendlyTable"></div>
+      <button type="button" class="floating-scroll-btn scroll-right" data-target="#calendlyTable" data-dir="1" title="Scroll Right"><i class="bi bi-chevron-right"></i></button>
+      <button type="button" class="floating-scroll-btn scroll-left" data-target="#calendlyTable" data-dir="-1" title="Scroll Left" hidden><i class="bi bi-chevron-left"></i></button>
     </div>
   </section>
 
@@ -2181,6 +4290,67 @@ tr:hover td {
   </div>
 </div>
 
+<div class="modal-overlay" id="calModalOverlay" hidden>
+  <div class="modal" style="max-width: 620px;">
+    <div class="modal-head">
+      <h3 id="calModalTitle" style="display:flex;align-items:center;gap:8px;"><i class="bi bi-calendar2-check-fill" style="color:#2A9DAE"></i> Calendly Consultation Details</h3>
+      <button class="modal-x" id="calModalClose">&times;</button>
+    </div>
+    <div style="padding: 12px 24px; border-bottom: 1px solid var(--border); background: var(--input-bg); font-size: 0.82rem; color: var(--text-muted);" id="calModalSubtitle">
+    </div>
+    <div class="modal-body" id="calModalBody" style="max-height: 480px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; padding: 20px 24px; background: var(--bg); grid-template-columns: 1fr;">
+    </div>
+    <div class="modal-foot">
+      <button type="button" class="btn btn-ghost" id="calModalDone">Close</button>
+      <button type="button" class="btn btn-save" id="calModalExtendBtn" style="background:#f59e0b;color:#fff;border-color:#d97706;display:inline-flex;align-items:center;gap:8px;"><i class="bi bi-calendar-plus" style="margin-right:6px;"></i> Extend Days</button>
+      <button type="button" class="btn btn-save" id="calModalFollowupBtn" style="background:#2A9DAE;display:inline-flex;align-items:center;gap:8px;"><i class="bi bi-send-fill" style="margin-right:6px;"></i> Send Follow-up</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="extendDaysModalOverlay" hidden>
+  <div class="modal" style="max-width: 480px;">
+    <div class="modal-head">
+      <h3 style="display:flex;align-items:center;gap:8px;"><i class="bi bi-calendar-plus" style="color:#2A9DAE;"></i> Extend Follow-up Schedule</h3>
+      <button class="modal-x" id="extendDaysClose">&times;</button>
+    </div>
+    <div style="padding: 12px 24px; border-bottom: 1px solid var(--border); background: var(--input-bg); font-size: 0.84rem; color: var(--text-muted);" id="extendDaysSubtitle">
+      Extend follow-up timeline for this customer
+    </div>
+    <div class="modal-body" style="padding: 20px 24px; display: flex; flex-direction: column; gap: 16px; background: var(--bg); grid-template-columns: 1fr;">
+      <div style="background:var(--card-bg, #fff);border:1px solid var(--border);border-radius:8px;padding:12px 16px;">
+        <div style="font-weight:700;font-size:14px;color:var(--text);" id="extendCustName">-</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-top:3px;" id="extendCustDetails">-</div>
+        <div style="font-size:12px;color:#b45309;font-weight:600;margin-top:5px;" id="extendCurrentStatus">-</div>
+      </div>
+
+      <div>
+        <label style="display:block;font-size:12px;font-weight:700;color:var(--text);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px;">Choose Additional Days</label>
+        <div style="display:grid;grid-template-columns:repeat(3, 1fr);gap:8px;margin-bottom:12px;">
+          <button type="button" class="preset-day-btn" data-days="3" style="padding:9px;border-radius:8px;border:1px solid var(--border);background:var(--card-bg,#fff);cursor:pointer;font-weight:700;font-size:13px;color:var(--text);text-align:center;">+3 Days</button>
+          <button type="button" class="preset-day-btn active" data-days="7" style="padding:9px;border-radius:8px;border:2px solid #2A9DAE;background:rgba(42,157,174,0.1);cursor:pointer;font-weight:700;font-size:13px;color:#2A9DAE;text-align:center;">+7 Days (1 Wk)</button>
+          <button type="button" class="preset-day-btn" data-days="14" style="padding:9px;border-radius:8px;border:1px solid var(--border);background:var(--card-bg,#fff);cursor:pointer;font-weight:700;font-size:13px;color:var(--text);text-align:center;">+14 Days (2 Wk)</button>
+        </div>
+        
+        <div style="display:flex;align-items:center;gap:10px;">
+          <label style="font-size:13px;color:var(--text);white-space:nowrap;font-weight:600;">Custom Days:</label>
+          <input type="number" id="extendDaysInput" min="1" max="90" value="7" style="width:85px;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:14px;font-weight:600;color:var(--text);background:var(--card-bg,#fff);">
+          <span style="font-size:12px;color:var(--text-muted);">additional days to schedule</span>
+        </div>
+      </div>
+
+      <div>
+        <label style="display:block;font-size:12px;font-weight:700;color:var(--text);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px;">Admin Note (Optional)</label>
+        <input type="text" id="extendNoteInput" placeholder="e.g. Customer requested callback next week" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:6px;font-size:13px;color:var(--text);background:var(--card-bg,#fff);box-sizing:border-box;">
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button type="button" class="btn btn-ghost" id="extendDaysCancel">Cancel</button>
+      <button type="button" class="btn btn-save" id="extendDaysSubmitBtn" style="background:#2A9DAE;display:inline-flex;align-items:center;gap:8px;"><i class="bi bi-calendar-plus" style="margin-right:6px;"></i> Save &amp; Extend Schedule</button>
+    </div>
+  </div>
+</div>
+
 <div class="confirm-overlay" id="confirmOverlay" hidden>
   <section class="confirm-card" role="alertdialog" aria-modal="true" aria-labelledby="confirmTitle" aria-describedby="confirmMessage">
     <div class="confirm-art" aria-hidden="true">
@@ -2240,12 +4410,21 @@ async function api(path, opts) {
   return data;
 }
 
-$("#logoutBtn").addEventListener("click", async () => {
+$("#logoutBtn")?.addEventListener("click", async () => {
   await fetch("/admin/logout", { method: "POST" });
   location.href = "/admin/login";
 });
 
-const VIEWS = {dashboard:"CRM Overview", all:"All Leads", upsert:"Upsert Leads", contact:"Contact Us Leads", enquiries:"Property Enquiries", conversations:"Property Conversations"};
+const VIEWS = {dashboard:"Dashboard", all:"All Leads", upsert:"Upsert Leads", calendly:"Calendly Bookings", contact:"Contact Us Leads", enquiries:"Property Enquiries", conversations:"Property Conversations"};
+const SUBTITLES = {
+  dashboard: "Let's see what we've got for you today",
+  all: "Combined records from both customer forms",
+  upsert: "Deduplicated & unified leads combined by phone number and email",
+  calendly: "Hot Leads consultation appointments & follow-up tracking",
+  contact: "Recent Contact Us form submissions",
+  enquiries: "Recent property requests & specifications",
+  conversations: "WhatsApp customer chat sessions"
+};
 let routeInitialized = false;
 function route() {
   const hashKey = location.hash.slice(1);
@@ -2255,27 +4434,72 @@ function route() {
     document.querySelector(`nav a[data-view=${k}]`)?.classList.toggle("on", k === v);
   }
   $("#title").textContent = VIEWS[v];
+  const subEl = $("#headerSubtitle");
+  if (subEl) subEl.textContent = SUBTITLES[v] || "";
   if (window.innerWidth <= 900) {
     sidebar.classList.remove("open");
     sideBackdrop.hidden = true;
+  }
+  if (v === "dashboard") {
+    setTimeout(() => {
+      if (typeof renderBarChart === "function") renderBarChart();
+      if (typeof renderHeatmap === "function") renderHeatmap();
+    }, 20);
   }
   setTimeout(updateAllTableScrollIndicators, 60);
   if (routeInitialized && typeof refreshSection === "function") {
     refreshSection(v);
   }
 }
+// Connect global search and sidebar logout
+$("#sideLogoutLink")?.addEventListener("click", async (e) => {
+  e.preventDefault();
+  await fetch("/admin/logout", { method: "POST" });
+  location.href = "/admin/login";
+});
+
+$("#globalHeaderSearch")?.addEventListener("input", (e) => {
+  const val = e.target.value.trim();
+  const currentHash = location.hash.slice(1);
+  if (currentHash && currentHash !== "dashboard") {
+    const searchInput = $(`#view-${currentHash} .search`);
+    if (searchInput) {
+      searchInput.value = val;
+      searchInput.dispatchEvent(new Event("input"));
+    }
+  }
+});
+
+$("#globalHeaderSearch")?.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    const currentHash = location.hash.slice(1);
+    if (!currentHash || currentHash === "dashboard") {
+      const val = e.target.value.trim();
+      location.hash = "#all";
+      setTimeout(() => {
+        const s = $("#view-all .search");
+        if (s) {
+          s.value = val;
+          s.dispatchEvent(new Event("input"));
+        }
+      }, 100);
+    }
+  }
+});
+
 addEventListener("hashchange", route);
 route();
 routeInitialized = true;
 
 const CARDS = [
-  ["new_today","New Today","bi-exclamation-circle-fill","#fff1f2","#e11d48"],
-  ["contacts_total","Contact Us Leads","bi-telephone-fill","#fff7ed","#ea580c"],
-  ["enquiries_total","Property Enquiries","bi-house-fill","#fefce8","#ca8a04"],
-  ["conversations_total","WhatsApp Chats","bi-whatsapp","#ecfdf5","#16a34a"],
-  ["immediate","Buying Within 1 Month","bi-lightning-charge-fill","#ecfdf5","#059669"],
-  ["cash","Cash Buyers","bi-cash-coin","#f0fdfa","#0d9488"],
-  ["high_budget","Budget 1 Cr+","bi-gem","#f5f3ff","#7c3aed"],
+  ["new_today", "New Today", "bi-bell-fill", "#fee2e2", "#ef4444", "Today"],
+  ["contacts_total", "Contact Us Leads", "bi-person-lines-fill", "#ffedd5", "#f97316", "Website"],
+  ["enquiries_total", "Property Enquiries", "bi-house-heart-fill", "#fef9c3", "#eab308", "Direct"],
+  ["conversations_total", "WhatsApp Chats", "bi-whatsapp", "#dcfce7", "#22c55e", "Active"],
+  ["hot_leads_total", "Hot / Calendly Leads", "bi-fire", "#ccfbf1", "#14b8a6", "High Intent"],
+  ["immediate", "Buying Within 1 Month", "bi-lightning-charge-fill", "#e0f2fe", "#0284c7", "Immediate"],
+  ["cash", "Cash Buyers", "bi-cash-coin", "#e0e7ff", "#6366f1", "Verified"],
+  ["high_budget", "Budget 1 Cr+", "bi-gem", "#f3e8ff", "#a855f7", "Premium"],
 ];
 
 const OPTIONS = {
@@ -2370,9 +4594,25 @@ const ENTITIES = {
       {name:"whatsapp_opt_in", label:"WhatsApp Opt-in", type:"checkbox", required:false},
     ],
   },
+  calendly: {
+    api: "/api/admin/calendly-leads",
+    title: "Calendly Hot Lead",
+  },
+  upsert: {
+    api: "/api/admin/calendly-leads",
+    title: "Upsert Lead",
+  },
+  conversations: {
+    api: "/api/admin/conversations",
+    title: "WhatsApp Conversation",
+  },
+  conversation: {
+    api: "/api/admin/conversations",
+    title: "WhatsApp Conversation",
+  },
 };
 
-let CACHE = { contact: [], enquiry: [], upsert: [], conversations: [] };
+let CACHE = { contact: [], enquiry: [], upsert: [], conversations: [], calendly: [] };
 
 function table(sel, entityKey, rows) {
   const cols = ENTITIES[entityKey].columns;
@@ -2394,9 +4634,92 @@ function table(sel, entityKey, rows) {
   setTimeout(updateAllTableScrollIndicators, 60);
 }
 function latest(sel, rows, name, detail) {
-  $(sel).innerHTML = rows.length
-    ? rows.slice(0, 5).map(r => `<div class="item"><b>${esc(name(r))}</b><small>${fmt(r.created_at)}</small><span>${esc(detail(r))}</span></div>`).join("")
-    : '<p class="none">No record found</p>';
+  const container = $(sel);
+  if (!container) return;
+  if (!rows || !rows.length) {
+    container.innerHTML = '<p class="none">No record found</p>';
+    return;
+  }
+  container.innerHTML = rows.slice(0, 5).map(r => {
+    const rawName = (name(r) || "").trim();
+    const safeName = esc(rawName) || "Anonymous";
+    const initial = esc(rawName.charAt(0).toUpperCase() || "?");
+    return `
+      <div class="item">
+        <div class="item-avatar">${initial}</div>
+        <div class="item-body">
+          <div class="item-top">
+            <b class="item-name" title="${safeName}">${safeName}</b>
+            <span class="item-time"><i class="bi bi-clock"></i> ${fmt(r.created_at)}</span>
+          </div>
+          <span>${esc(detail(r))}</span>
+        </div>
+      </div>`;
+  }).join("");
+}
+
+function renderLatestContact(rows) {
+  const el = $("#latestContact");
+  if (!el) return;
+  if (!rows || !rows.length) {
+    el.innerHTML = '<p class="none">No contact leads found</p>';
+    return;
+  }
+  el.innerHTML = rows.slice(0, 5).map(r => {
+    const rawName = (r.full_name || `${r.first_name || ""} ${r.last_name || ""}`).trim();
+    const safeName = esc(rawName) || "Anonymous Lead";
+    const initial = esc(rawName.charAt(0).toUpperCase() || "?");
+    const optIn = r.whatsapp_opt_in
+      ? `<span class="feed-tag wa"><i class="bi bi-whatsapp"></i> WhatsApp Opted-in</span>`
+      : `<span class="feed-tag web"><i class="bi bi-globe"></i> Web Form</span>`;
+    const phone = r.contact_number ? `<span class="feed-phone"><i class="bi bi-telephone"></i> ${esc(r.contact_number)}</span>` : "";
+    return `
+      <div class="item">
+        <div class="item-avatar">${initial}</div>
+        <div class="item-body">
+          <div class="item-top">
+            <b class="item-name" title="${safeName}">${safeName}</b>
+            <span class="item-time"><i class="bi bi-clock"></i> ${fmt(r.created_at)}</span>
+          </div>
+          <div class="item-meta">
+            ${optIn}
+            ${phone}
+          </div>
+        </div>
+      </div>`;
+  }).join("");
+}
+
+function renderLatestEnquiries(rows) {
+  const el = $("#latestEnq");
+  if (!el) return;
+  if (!rows || !rows.length) {
+    el.innerHTML = '<p class="none">No property enquiries found</p>';
+    return;
+  }
+  el.innerHTML = rows.slice(0, 5).map(r => {
+    const rawName = (`${r.first_name || ""} ${r.last_name || ""}`).trim() || r.full_name || "";
+    const safeName = esc(rawName) || "Anonymous Lead";
+    const initial = esc(rawName.charAt(0).toUpperCase() || "?");
+    const loc = r.location_preference ? `<span class="feed-tag loc" title="${esc(r.location_preference)}"><i class="bi bi-geo-alt-fill"></i> ${esc(r.location_preference)}</span>` : "";
+    const budget = r.budget_range ? `<span class="feed-tag budget"><i class="bi bi-tag-fill"></i> ${esc(r.budget_range)}</span>` : "";
+    const bhk = r.bhk_preference ? `<span class="feed-tag bhk">${esc(r.bhk_preference)}</span>` : "";
+    return `
+      <div class="item">
+        <div class="item-avatar item-avatar-enq">${initial}</div>
+        <div class="item-body">
+          <div class="item-top">
+            <b class="item-name" title="${safeName}">${safeName}</b>
+            <span class="item-time"><i class="bi bi-clock"></i> ${fmt(r.created_at)}</span>
+          </div>
+          <div class="item-meta">
+            ${loc}
+            ${budget}
+            ${bhk}
+          </div>
+        </div>
+      </div>`;
+  }).join("");
 }
 function allLeadsTable(contacts, enquiries, conversations = []) {
   const rows = [
@@ -2533,19 +4856,576 @@ async function loadUpsertLeads() {
   }
 }
 
+let currentCalendlyFilter = "all";
+
+function calendlyTable(rows) {
+  const container = $("#calendlyTable");
+  if (!container) return;
+  container.innerHTML = rows.length
+    ? `<table><thead><tr>
+         <th class="col-cb"><input type="checkbox" class="cb-lead select-all" data-entity="calendly" title="Select All"></th>
+         <th>#</th>
+         <th>Customer Name</th>
+         <th>Email &amp; Contact</th>
+         <th>Date &amp; Time</th>
+         <th>Timeline</th>
+         <th>Status</th>
+         <th>Quality / Zoho</th>
+         <th>Actions</th>
+         <th>Follow-up</th>
+       </tr></thead><tbody>` +
+      rows.map((r, i) => {
+        const initial = (r.customer_name || 'C').charAt(0).toUpperCase();
+        const custNameHtml = `
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span class="avatar" style="width:28px;height:28px;font-size:12px;background:#e0f2fe;color:#0284c7;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-weight:700;">${esc(initial)}</span>
+            <div>
+              <b>${esc(r.customer_name)}</b>
+              <div style="font-size:11px;color:#64748b;display:flex;align-items:center;gap:4px;">
+                <span style="color:#ef4444;"><i class="bi bi-fire"></i> Hot Lead</span>
+                <span>· ${esc(r.days_old)}d old</span>
+              </div>
+            </div>
+          </div>`;
+
+        const cleanPh = (r.phone || '').replace(/\D/g, '');
+        const emailContactHtml = `
+          <div class="c-info" style="gap:4px;">
+            <div style="display:flex;align-items:center;gap:6px;">
+              ${r.email ? `
+                <a href="mailto:${esc(r.email)}" style="color:var(--primary,#2A9DAE);text-decoration:none;font-weight:500;font-size:12.5px;display:inline-flex;align-items:center;gap:5px;" title="Email: ${esc(r.email)}">
+                  <i class="bi bi-envelope" style="font-size:11px;color:var(--primary,#2A9DAE);"></i> ${esc(r.email)}
+                </a>
+                <button type="button" class="copy-btn" onclick="navigator.clipboard.writeText('${esc(r.email)}');this.innerHTML='✓';setTimeout(()=>this.innerHTML='<i class=\\\'bi bi-copy\\\'></i>',1200)" title="Copy email" style="border:none;background:transparent;cursor:pointer;color:#94a3b8;font-size:11px;padding:0 2px;"><i class="bi bi-copy"></i></button>
+              ` : '<span style="color:#94a3b8;font-size:12px;">-</span>'}
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;">
+              ${r.phone ? `
+                <a href="tel:${esc(r.phone)}" style="color:var(--text);text-decoration:none;font-weight:500;font-size:12px;display:inline-flex;align-items:center;gap:5px;" title="Call: ${esc(r.phone)}">
+                  <i class="bi bi-telephone" style="color:#10b981;font-size:11px;"></i> ${esc(r.phone)}
+                </a>
+                ${cleanPh ? `<a href="https://wa.me/${cleanPh}" target="_blank" rel="noopener noreferrer" style="color:#25d366;font-size:13px;display:inline-flex;align-items:center;" title="Chat on WhatsApp"><i class="bi bi-whatsapp"></i></a>` : ''}
+              ` : '<span style="color:#94a3b8;font-size:12px;">-</span>'}
+            </div>
+          </div>`;
+
+        let dtHtml = '';
+        if (r.is_booked && r.appointment_time) {
+          dtHtml = `<span class="appt-date-badge" title="Booked Consultation Slot"><i class="bi bi-calendar2-check-fill"></i> ${fmt(r.appointment_time)}</span>`;
+        } else {
+          dtHtml = `<span title="Form Submission Date" style="font-size:12px;color:#64748b;"><i class="bi bi-clock"></i> ${fmt(r.submission_time || r.date_time)}</span>`;
+        }
+
+        const isUrgent = (r.timeline || "").toLowerCase().includes("immediate") || (r.timeline || "").toLowerCase().includes("1 month");
+        const timelineHtml = `<span class="timeline-badge ${isUrgent ? 'urgent' : ''}" title="Planning to buy: ${esc(r.timeline)}"><i class="bi bi-hourglass-split"></i> ${esc(r.timeline || 'Within 1 Month')}</span>`;
+
+        let statusBadge = '';
+        if (r.is_booked || r.status === 'Lead Booked' || r.status === 'Scheduled') {
+          statusBadge = `<span class="badge-status-booked" style="background:rgba(16,185,129,0.12);color:#059669;border:1px solid rgba(16,185,129,0.3);padding:4px 10px;border-radius:20px;font-size:12px;font-weight:700;display:inline-flex;align-items:center;gap:5px;"><i class="bi bi-calendar-check-fill" style="color:#059669;"></i> Lead Booked</span>`;
+        } else if (r.overdue_7days) {
+          statusBadge = `<span class="badge-overdue" title="7+ days unbooked — Call required by Salesperson"><i class="bi bi-telephone-exclamation-fill"></i> 7+ Days Overdue (Call Required)</span>`;
+        } else if (r.followup_stage === 3) {
+          statusBadge = `<span class="badge-followup-stage" style="background:rgba(225,29,72,0.12);color:#e11d48;border-color:rgba(225,29,72,0.3);"><i class="bi bi-envelope-exclamation-fill"></i> Day 7 Final Notice</span>`;
+        } else if (r.followup_stage === 2) {
+          statusBadge = `<span class="badge-followup-stage"><i class="bi bi-envelope-paper-fill"></i> Day 3 Reminder</span>`;
+        } else if (r.followup_stage === 1) {
+          statusBadge = `<span class="badge-followup-stage" style="background:rgba(59,130,246,0.12);color:#2563eb;border-color:rgba(59,130,246,0.3);"><i class="bi bi-envelope-fill"></i> Day 1 Sent</span>`;
+        } else if (r.clicked) {
+          statusBadge = `<span class="badge-clicked" title="Clicked booking link, appointment pending"><i class="bi bi-cursor-fill"></i> Clicked (Pending)</span>`;
+        } else {
+          statusBadge = `<span class="badge-clicked" style="opacity:0.8;"><i class="bi bi-clock-history"></i> Pending Booking</span>`;
+        }
+
+        if (r.extended_days > 0 && !r.is_booked) {
+          statusBadge += `<div style="font-size:11px;color:#b45309;font-weight:600;display:flex;align-items:center;gap:3px;margin-top:4px;" title="Admin extended follow-up schedule by +${r.extended_days} days"><i class="bi bi-clock-history"></i> +${r.extended_days}d extended</div>`;
+        }
+
+        let zohoBadge = '';
+        if (r.zoho_lead_id || r.zoho_sync_status === "synced") {
+          zohoBadge = `<span class="badge-zoho" title="Synced in Zoho CRM (ID: ${esc(r.zoho_lead_id || '')})"><i class="bi bi-cloud-check-fill"></i> Zoho</span>`;
+        } else {
+          zohoBadge = `<span class="badge-sync-pending" title="Hot lead queued for Zoho sync"><i class="bi bi-hourglass-split"></i> Syncing</span>`;
+        }
+        const qualityZohoHtml = `
+          <div style="display:flex;flex-wrap:wrap;gap:4px;align-items:center;">
+            <span class="badge-hot" title="Hot Lead Score: ${r.lead_score || 85}/100"><i class="bi bi-fire"></i> Hot (${r.lead_score || 85})</span>
+            ${zohoBadge}
+          </div>`;
+
+        const actionsHtml = `
+          <div class="actions">
+            <button type="button" class="iconbtn btn-view-cal" data-id="${esc(r.id)}" title="View Booking &amp; Preference Details"><i class="bi bi-eye"></i></button>
+            <button type="button" class="iconbtn btn-extend-cal" data-id="${esc(r.id)}" data-name="${esc(r.customer_name)}" data-days="${r.extended_days || 0}" data-old="${esc(r.days_old)}" data-booked="${r.is_booked ? 1 : 0}" title="Add or Extend Follow-up Days (+3, +7, +14, etc.)"><i class="bi bi-calendar-plus"></i></button>
+            <button type="button" class="iconbtn danger del-cal-btn" data-id="${esc(r.id)}" data-name="${esc(r.customer_name || 'Hot Lead')}" title="Admin Manual Delete: Permanently delete lead from Zoho CRM &amp; Database"><i class="bi bi-trash3"></i></button>
+          </div>`;
+
+        let followupHtml = '';
+        if (r.is_booked || r.reminders_closed || r.status === 'Lead Booked' || r.status === 'Scheduled') {
+          followupHtml = `<span class="badge-reminders-closed" style="background:rgba(16,185,129,0.1);color:#059669;border:1px solid rgba(16,185,129,0.25);border-radius:20px;padding:6px 14px;font-size:12px;font-weight:700;display:inline-flex;align-items:center;gap:6px;" title="Meeting Booked — Reminders Closed"><i class="bi bi-check2-circle" style="font-size:15px;color:#059669;"></i> Reminders Closed</span>`;
+        } else if (r.overdue_7days) {
+          const alertBadge = r.salesperson_day7_notified
+            ? `<div style="font-size:11px;color:#16a34a;font-weight:700;display:flex;align-items:center;gap:4px;margin-top:4px;"><i class="bi bi-check-circle-fill"></i> Salesperson Call Alerted</div>`
+            : `<div style="font-size:11px;color:#dc2626;font-weight:700;display:flex;align-items:center;gap:4px;margin-top:4px;"><i class="bi bi-telephone-outbound-fill"></i> Sales Call Needed</div>`;
+          followupHtml = `
+            <div style="display:flex;flex-direction:column;align-items:flex-start;">
+              <button type="button" class="btn-followup stage-3" data-id="${esc(r.id)}" data-stage="${r.followup_stage}" title="Send Day 7 notice and alert salesperson to call">
+                <i class="bi bi-telephone-outbound-fill" style="margin-right:6px;"></i> Send &amp; Alert Sales
+              </button>
+              ${alertBadge}
+            </div>`;
+        } else {
+          const nextStage = Math.min(3, (r.followup_stage || 0) + 1);
+          const stageLabels = {1: "Day 1", 2: "Day 3", 3: "Day 7 (Final)"};
+          const cls = nextStage === 3 ? "stage-3" : "";
+          followupHtml = `
+            <button type="button" class="btn-followup ${cls}" data-id="${esc(r.id)}" data-stage="${r.followup_stage}" title="Send follow-up email to ${esc(r.email)}">
+              <i class="bi bi-send-fill" style="margin-right:6px;"></i> Send Follow-up (${stageLabels[nextStage] || 'Next'})
+            </button>`;
+        }
+
+        return `
+        <tr data-id="${esc(r.id)}">
+          <td class="col-cb"><input type="checkbox" class="cb-lead row-cb" data-entity="calendly" data-id="${esc(r.id)}"></td>
+          <td>${i + 1}</td>
+          <td>${custNameHtml}</td>
+          <td>${emailContactHtml}</td>
+          <td>${dtHtml}</td>
+          <td>${timelineHtml}</td>
+          <td>${statusBadge}</td>
+          <td>${qualityZohoHtml}</td>
+          <td>${actionsHtml}</td>
+          <td>${followupHtml}</td>
+        </tr>`;
+      }).join("") +
+      `</tbody></table>`
+    : '<p class="none">No Calendly hot leads found matching the selected filter.</p>';
+  updateDeleteButtons();
+  setTimeout(updateAllTableScrollIndicators, 60);
+}
+
+async function loadCalendlyLeads() {
+  try {
+    const data = await api("/api/admin/calendly-leads");
+    CACHE.calendly = Array.isArray(data) ? data : [];
+
+    const countAll = CACHE.calendly.length;
+    const countScheduled = CACHE.calendly.filter(r => r.is_booked || r.status === 'Lead Booked').length;
+    const countClicked = CACHE.calendly.filter(r => !r.is_booked && r.status !== 'Lead Booked' && (r.clicked || (r.status || "").includes("Clicked") || (r.status || "").includes("Pending"))).length;
+    const countFollowup = CACHE.calendly.filter(r => !r.is_booked && r.status !== 'Lead Booked' && r.followup_stage > 0).length;
+    const countOverdue = CACHE.calendly.filter(r => !r.is_booked && r.status !== 'Lead Booked' && r.overdue_7days).length;
+
+    if ($("#countCalAll")) $("#countCalAll").textContent = countAll;
+    if ($("#countCalScheduled")) $("#countCalScheduled").textContent = countScheduled;
+    if ($("#countCalClicked")) $("#countCalClicked").textContent = countClicked;
+    if ($("#countCalFollowup")) $("#countCalFollowup").textContent = countFollowup;
+    if ($("#countCalOverdue")) $("#countCalOverdue").textContent = countOverdue;
+
+    filterAndRenderCalendly();
+    $("#err").hidden = true;
+  } catch (err) {
+    console.error("Failed to load Calendly leads:", err);
+    if ($("#calendlyTable") && (!CACHE.calendly || CACHE.calendly.length === 0)) {
+      $("#calendlyTable").innerHTML = `<div style="padding:2.5rem;text-align:center;color:#64748b;"><i class="bi bi-exclamation-circle" style="font-size:2rem;color:#f59e0b;display:block;margin-bottom:0.75rem;"></i><b style="color:#1e293b;">Could not load Calendly leads</b><p style="margin:0.5rem 0 0;font-size:0.9rem;">${esc(err.message || 'Server error')}. Please refresh or try again.</p></div>`;
+    }
+  }
+}
+
+function filterAndRenderCalendly() {
+  const q = ($("#view-calendly .search")?.value || "").trim().toLowerCase();
+  let rows = CACHE.calendly || [];
+
+  if (currentCalendlyFilter === "scheduled") {
+    rows = rows.filter(r => r.is_booked || r.status === 'Lead Booked');
+  } else if (currentCalendlyFilter === "clicked") {
+    rows = rows.filter(r => !r.is_booked && r.status !== 'Lead Booked' && (r.clicked || (r.status || "").includes("Clicked") || (r.status || "").includes("Pending")));
+  } else if (currentCalendlyFilter === "followup") {
+    rows = rows.filter(r => !r.is_booked && r.status !== 'Lead Booked' && r.followup_stage > 0);
+  } else if (currentCalendlyFilter === "overdue") {
+    rows = rows.filter(r => !r.is_booked && r.status !== 'Lead Booked' && r.overdue_7days);
+  }
+
+  if (q) {
+    rows = rows.filter(r =>
+      (r.customer_name && r.customer_name.toLowerCase().includes(q)) ||
+      (r.email && r.email.toLowerCase().includes(q)) ||
+      (r.phone && r.phone.toLowerCase().includes(q)) ||
+      (r.location && r.location.toLowerCase().includes(q)) ||
+      (r.timeline && r.timeline.toLowerCase().includes(q)) ||
+      (r.status && r.status.toLowerCase().includes(q))
+    );
+  }
+
+  calendlyTable(rows);
+}
+
+async function sendFollowUpEmail(leadId, btn) {
+  if (btn) {
+    btn.classList.add("sending");
+    btn.disabled = true;
+    btn.innerHTML = `<span style="display:inline-block;animation:spin 0.8s linear infinite;"><i class="bi bi-arrow-repeat"></i></span> Sending...`;
+  }
+  try {
+    const res = await api(`/api/admin/calendly/send-followup/${encodeURIComponent(leadId)}`, { method: "POST" });
+    showAlert({
+      title: "Follow-up Email Sent",
+      message: res.message || "Customer follow-up email successfully delivered.",
+      type: "success",
+    });
+    await loadCalendlyLeads();
+  } catch (err) {
+    showAlert({
+      title: "Follow-up Failed",
+      message: err.message || "Could not send follow-up email. Check SMTP settings.",
+      type: "error",
+    });
+    if (btn) {
+      btn.classList.remove("sending");
+      btn.disabled = false;
+      btn.innerHTML = `<i class="bi bi-send-fill"></i> Retry Follow-up`;
+    }
+  }
+}
+
+async function runAutoFollowupsCycle(btn) {
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = `<span style="display:inline-block;animation:spin 0.8s linear infinite;"><i class="bi bi-arrow-repeat"></i></span> Checking...`;
+  }
+  try {
+    const res = await api("/api/admin/calendly/run-followups", { method: "POST" });
+    const s = res.summary || {};
+    showAlert({
+      title: "Follow-up &amp; Salesperson Alert Complete",
+      message: `Evaluated ${s.evaluated || 0} hot leads: ${s.booked || 0} scheduled appointments, ${s.followups_sent || 0} follow-up emails sent, ${s.salesperson_alerts || 0} urgent 7-day salesperson call alerts dispatched. Leads remain preserved in Zoho CRM under manual Admin control.`,
+      type: "success",
+    });
+    await loadCalendlyLeads();
+  } catch (err) {
+    showAlert({
+      title: "Cycle Failed",
+      message: err.message || "Error running follow-up cycle.",
+      type: "error",
+    });
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = `<i class="bi bi-arrow-repeat"></i> Run Follow-up Cycle`;
+    }
+  }
+}
+
+function showCalendlyDetailsModal(leadId) {
+  const lead = (CACHE.calendly || []).find(r => r.id === leadId);
+  if (!lead) return;
+
+  const overlay = $("#calModalOverlay");
+  if (!overlay) return;
+
+  const isBooked = Boolean(lead.is_booked || lead.status === "Lead Booked" || lead.status === "Scheduled");
+
+  $("#calModalTitle").innerHTML = isBooked
+    ? `<i class="bi bi-calendar-check-fill" style="color:#059669"></i> Lead Booked: ${esc(lead.customer_name)}`
+    : `<i class="bi bi-calendar2-check-fill" style="color:#2A9DAE"></i> Calendly Consultation: ${esc(lead.customer_name)}`;
+
+  $("#calModalSubtitle").innerHTML = `<b>Email:</b> ${esc(lead.email || '-')} &bull; <b>Phone:</b> ${esc(lead.phone || '-')} &bull; <b>Timeline:</b> ${esc(lead.timeline || '-')}`;
+
+  let bHtml = "";
+  if (isBooked) {
+    const b = lead.booking_details || {};
+    bHtml = `
+      <div style="background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.3);border-radius:8px;padding:14px 18px;">
+        <h4 style="margin:0 0 8px 0;color:#059669;display:flex;align-items:center;gap:6px;"><i class="bi bi-check-circle-fill"></i> Lead Booked — Consultation Confirmed</h4>
+        <p style="margin:4px 0;font-size:13px;"><b>Event Type:</b> ${esc(b.event_type_name || b.event_name || 'Property Consultation')}</p>
+        <p style="margin:4px 0;font-size:13px;"><b>Scheduled Date &amp; Time:</b> ${fmt(lead.appointment_time || b.start_time)}</p>
+        <p style="margin:4px 0;font-size:13px;"><b>Client:</b> ${esc(b.invitee_name || b.invitee_full_name || lead.customer_name)} (${esc(b.invitee_email || lead.email)})</p>
+        ${b.join_url ? `<p style="margin:4px 0;font-size:13px;"><b>Meeting Link:</b> <a href="${esc(b.join_url)}" target="_blank" rel="noopener noreferrer" style="color:#059669;font-weight:600;">Open Meeting URL</a></p>` : ''}
+        <div style="margin-top:12px;padding:10px 14px;background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.3);border-radius:6px;color:#059669;font-weight:700;font-size:12.5px;display:flex;align-items:center;gap:6px;">
+          <i class="bi bi-check2-circle" style="font-size:17px;"></i> Reminders Closed: Meeting is booked. All follow-up reminder cycles are automatically closed.
+        </div>
+      </div>`;
+  } else {
+    const ext = lead.extended_days || 0;
+    bHtml = `
+      <div style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.3);border-radius:8px;padding:14px 18px;">
+        <h4 style="margin:0 0 8px 0;color:#d97706;display:flex;align-items:center;gap:6px;"><i class="bi bi-hourglass-split"></i> Consultation Booking Pending</h4>
+        <p style="margin:4px 0;font-size:13px;"><b>Booking Link Clicked:</b> ${lead.clicked ? '<span style="color:#059669;font-weight:600;">Yes (Customer visited link)</span>' : 'No'}</p>
+        <p style="margin:4px 0;font-size:13px;"><b>Follow-up Stage:</b> Stage ${lead.followup_stage} of 3</p>
+        <p style="margin:4px 0;font-size:13px;"><b>Lead Age:</b> ${esc(lead.days_old)} days old</p>
+        ${ext > 0 ? `
+          <div style="margin-top:8px;padding:8px 12px;background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.3);border-radius:6px;font-size:12.5px;color:#b45309;font-weight:600;display:flex;align-items:center;gap:6px;">
+            <i class="bi bi-clock-history"></i> Schedule Extended by +${ext} days (Overdue threshold: ${7 + ext} days)
+          </div>` : ''}
+        ${lead.overdue_7days ? `
+          <div style="margin-top:10px;padding:10px;background:rgba(220,38,38,0.08);border:1px solid rgba(220,38,38,0.25);border-radius:6px;">
+            <p style="margin:0;font-size:13px;color:#dc2626;font-weight:700;"><i class="bi bi-telephone-exclamation-fill"></i> 7+ Days Overdue — Urgent Salesperson Call Required</p>
+            <p style="margin:4px 0 0 0;font-size:12px;color:#64748b;">
+              ${lead.salesperson_day7_notified ? `<span style="color:#16a34a;font-weight:600;"><i class="bi bi-check-circle-fill"></i> Salesperson was alerted via email to call this customer.</span>` : `Salesperson call alert pending.`}
+            </p>
+            <p style="margin:4px 0 0 0;font-size:12px;color:#b91c1c;font-weight:500;">
+              Admin Right: As Administrator, you can extend the follow-up days or manually delete this lead from Zoho CRM and the local database.
+            </p>
+          </div>` : `
+          <p style="margin:6px 0 0 0;font-size:12px;color:#64748b;">Notice: Admin can extend follow-up schedule anytime. On Day 7 (plus extensions), an alert is emailed to the salesperson to call this Hot Lead.</p>`}
+      </div>`;
+  }
+
+  const prefHtml = `
+    <div style="background:var(--input-bg);border:1px solid var(--border);border-radius:8px;padding:14px 18px;">
+      <h4 style="margin:0 0 8px 0;color:var(--text);display:flex;align-items:center;gap:6px;"><i class="bi bi-house-heart"></i> Property Preferences</h4>
+      <p style="margin:4px 0;font-size:13px;"><b>Location:</b> ${esc(lead.location || '-')}</p>
+      <p style="margin:4px 0;font-size:13px;"><b>BHK Preference:</b> ${esc(lead.bhk || '-')}</p>
+      <p style="margin:4px 0;font-size:13px;"><b>Budget:</b> ${esc(lead.budget || '-')}</p>
+      <p style="margin:4px 0;font-size:13px;"><b>Timeline:</b> ${esc(lead.timeline || '-')}</p>
+      ${lead.requirement ? `<p style="margin:6px 0 0 0;font-size:13px;"><b>Requirements:</b> ${esc(lead.requirement)}</p>` : ''}
+    </div>`;
+
+  const zohoHtml = `
+    <div style="background:var(--input-bg);border:1px solid var(--border);border-radius:8px;padding:14px 18px;">
+      <h4 style="margin:0 0 8px 0;color:var(--text);display:flex;align-items:center;gap:6px;"><i class="bi bi-cloud-check"></i> Zoho CRM Integration</h4>
+      <p style="margin:4px 0;font-size:13px;"><b>Zoho Sync Status:</b> ${esc(lead.zoho_sync_status || '-')}</p>
+      <p style="margin:4px 0;font-size:13px;"><b>Zoho Lead ID:</b> ${esc(lead.zoho_lead_id || 'Pending sync')}</p>
+    </div>`;
+
+  $("#calModalBody").innerHTML = bHtml + prefHtml + zohoHtml;
+
+  const extBtn = $("#calModalExtendBtn");
+  if (extBtn) {
+    if (isBooked) {
+      extBtn.style.display = "none";
+    } else {
+      extBtn.style.display = "inline-flex";
+      extBtn.style.alignItems = "center";
+      extBtn.style.gap = "8px";
+      extBtn.innerHTML = `<i class="bi bi-calendar-plus" style="margin-right:6px;"></i> Extend Days`;
+      extBtn.onclick = () => {
+        closeCalModal();
+        openExtendDaysModal(lead.id);
+      };
+    }
+  }
+
+  const fBtn = $("#calModalFollowupBtn");
+  if (fBtn) {
+    if (isBooked) {
+      fBtn.style.display = "none";
+    } else {
+      fBtn.style.display = "inline-flex";
+      fBtn.style.alignItems = "center";
+      fBtn.style.gap = "8px";
+      fBtn.innerHTML = lead.overdue_7days
+        ? `<i class="bi bi-telephone-outbound-fill" style="margin-right:6px;"></i> Send &amp; Alert Sales`
+        : `<i class="bi bi-send-fill" style="margin-right:6px;"></i> Send Follow-up`;
+      fBtn.onclick = () => {
+        closeCalModal();
+        sendFollowUpEmail(lead.id, null);
+      };
+    }
+  }
+
+  overlay.hidden = false;
+}
+
+function closeCalModal() {
+  const overlay = $("#calModalOverlay");
+  if (overlay) overlay.hidden = true;
+}
+
+
+let revBarChart = null;
+function renderBarChart() {
+  const canvas = $("#revenueBarChart");
+  if (!canvas) return;
+  if (revBarChart) {
+    revBarChart.destroy();
+    revBarChart = null;
+  }
+
+  const isDark = document.documentElement.classList.contains("dark-theme") || document.documentElement.getAttribute("data-theme") === "dark";
+  const navyColor = isDark ? "#1E3A5F" : "#0F2744";
+  const tealColor = "#2A9DAE";
+  const gridColor = isDark ? "rgba(255, 255, 255, 0.05)" : "rgba(15, 23, 42, 0.05)";
+  const textColor = isDark ? "#94A3B8" : "#64748B";
+
+  revBarChart = new Chart(canvas, {
+    type: "bar",
+    data: {
+      labels: ["Jan", "Feb", "Mar", "Apr", "May", "Jun"],
+      datasets: [
+        {
+          label: "Property Inquiries",
+          data: [48, 70, 52, 62, 74, 68],
+          backgroundColor: navyColor,
+          borderRadius: 6,
+          borderSkipped: false,
+          barPercentage: 0.62,
+          categoryPercentage: 0.58,
+        },
+        {
+          label: "Qualified Hot Leads",
+          data: [32, 48, 28, 42, 50, 46],
+          backgroundColor: tealColor,
+          borderRadius: 6,
+          borderSkipped: false,
+          barPercentage: 0.62,
+          categoryPercentage: 0.58,
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          display: false
+        },
+        tooltip: {
+          backgroundColor: isDark ? "#1E293B" : "#0F172A",
+          titleColor: "#FFFFFF",
+          bodyColor: "#FFFFFF",
+          padding: 10,
+          cornerRadius: 8,
+          callbacks: {
+            label: (ctx) => ` ${ctx.dataset.label}: ${ctx.raw} leads`
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: {
+            display: false
+          },
+          ticks: {
+            color: textColor,
+            font: { size: 12, weight: "500" }
+          }
+        },
+        y: {
+          beginAtZero: true,
+          max: 100,
+          grid: {
+            color: gridColor,
+            drawBorder: false
+          },
+          ticks: {
+            color: textColor,
+            font: { size: 11 },
+            stepSize: 20,
+            callback: (val) => `${val}`
+          }
+        }
+      }
+    }
+  });
+}
+
+function renderHeatmap() {
+  const container = $("#heatmapGrid");
+  if (!container) return;
+  const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  // Heatmap density levels: 1 = light teal, 2 = medium teal, 3 = deep teal
+  const pattern = [
+    [1, 1, 1, 2, 1, 1, 2, 2, 1, 2, 1], // Mon
+    [1, 1, 2, 1, 1, 2, 3, 2, 1, 1, 2], // Tue
+    [1, 2, 1, 1, 2, 1, 1, 1, 2, 2, 1], // Wed
+    [2, 1, 1, 3, 2, 1, 2, 3, 1, 1, 1], // Thu
+    [1, 2, 2, 1, 1, 2, 1, 2, 3, 2, 1], // Fri
+    [1, 1, 1, 2, 1, 1, 1, 1, 2, 1, 1], // Sat
+    [1, 1, 2, 1, 1, 1, 1, 2, 1, 1, 1], // Sun
+  ];
+  let html = "";
+  days.forEach((day, rIdx) => {
+    html += `<div class="heatmap-row">`;
+    html += `<span class="heatmap-day-label">${day}</span>`;
+    html += `<div class="heatmap-cells">`;
+    pattern[rIdx].forEach((level, cIdx) => {
+      const activeCount = level === 3 ? "24" : level === 2 ? "12" : "4";
+      html += `<span class="heatmap-cell level-${level}" title="${day} slot ${cIdx + 1}: ${activeCount} interactions"></span>`;
+    });
+    html += `</div></div>`;
+  });
+  container.innerHTML = html;
+}
+
 let chart;
 const PALETTE = ["#2A9DAE","#f0466a","#ff8a5c","#4cc38a","#e6cf20","#9b7cf0","#3aa8c1","#a3a3a3","#c2185b","#7cb342"];
 function donut(data) {
-  const labels = Object.keys(data);
-  $("#chartEmpty").hidden = labels.length > 0;
+  const labels = Object.keys(data || {});
+  const values = Object.values(data || {});
+  const totalBhk = values.reduce((acc, v) => acc + (Number(v) || 0), 0);
+  
+  const emptyEl = $("#chartEmpty");
+  const canvasEl = $("#chart");
+  const centerEl = $("#donutCenterInfo");
+  const badgeEl = $("#bhkTotalBadge");
+  const breakdownEl = $("#bhkBreakdown");
+  
+  if (badgeEl) badgeEl.textContent = `${totalBhk} Enquiries`;
+  if (centerEl) {
+    const centerNum = $("#donutCenterCount");
+    if (centerNum) centerNum.textContent = totalBhk;
+    centerEl.hidden = totalBhk === 0;
+  }
+  if (emptyEl) emptyEl.hidden = labels.length > 0;
+  
+  if (breakdownEl) {
+    if (!labels.length) {
+      breakdownEl.innerHTML = "";
+    } else {
+      breakdownEl.innerHTML = labels.map((lbl, i) => {
+        const val = values[i];
+        const pct = totalBhk > 0 ? Math.round((val / totalBhk) * 100) : 0;
+        const color = PALETTE[i % PALETTE.length];
+        return `<span class="bhk-chip" title="${val} enquiries (${pct}%)"><span class="chip-dot" style="background:${color}"></span><b>${esc(lbl)}</b> <small>${val} (${pct}%)</small></span>`;
+      }).join("");
+    }
+  }
+
   if (chart) chart.destroy();
-  if (!labels.length) return;
-  chart = new Chart($("#chart"), {
+  if (!labels.length || !canvasEl) return;
+
+  const isDark = document.documentElement.classList.contains("dark-theme") || document.documentElement.getAttribute("data-theme") === "dark";
+  chart = new Chart(canvasEl, {
     type: "doughnut",
-    data: {labels, datasets: [{data: Object.values(data), backgroundColor: PALETTE}]},
-    options: {maintainAspectRatio: false, cutout: "55%", plugins: {legend: {position: "top", labels: {boxWidth: 12, font: {size: 11}}}}},
+    data: {
+      labels,
+      datasets: [{
+        data: values,
+        backgroundColor: PALETTE,
+        borderWidth: 3,
+        borderColor: isDark ? "#111a2c" : "#ffffff",
+        hoverOffset: 6,
+      }],
+    },
+    options: {
+      maintainAspectRatio: false,
+      cutout: "72%",
+      plugins: {
+        legend: {
+          display: false,
+        },
+        tooltip: {
+          callbacks: {
+            label: function(ctx) {
+              const val = ctx.raw || 0;
+              const pct = totalBhk > 0 ? Math.round((val / totalBhk) * 100) : 0;
+              return ` ${ctx.label}: ${val} (${pct}%)`;
+            }
+          }
+        }
+      },
+    },
   });
 }
+
+const themeChartObserver = new MutationObserver(() => {
+  if (chart && CACHE.summary_bhk) {
+    donut(CACHE.summary_bhk);
+  }
+  if (typeof renderBarChart === "function") {
+    renderBarChart();
+  }
+});
+themeChartObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme", "class"] });
 
 let loadingDashboard = false;
 async function refreshDashboard() {
@@ -2559,20 +5439,60 @@ async function refreshDashboard() {
     ]);
     CACHE.contact = c;
     CACHE.enquiry = e;
-    $("#total").textContent = `Total: ${s.total}`;
-    $("#cards").innerHTML = CARDS.map(([k, label, ic, bg, fg]) => `
-      <div class="card" style="--bg:${bg};--ic:${fg}">
-        <div class="r"><span class="ic"><i class="bi ${ic}"></i></span><b>${s.cards[k] ?? 0}</b></div>
-        <p>${label}</p>
-      </div>`).join("");
-    donut(s.bhk || {});
-    latest("#latestContact", c || [], r => r.full_name, r => r.whatsapp_opt_in ? "WhatsApp questionnaire opted in" : "Contact form submission");
-    latest("#latestEnq", e || [], r => `${r.first_name} ${r.last_name || ""}`.trim(),
-      r => `${r.location_preference} · ${r.budget_range}`);
-    $("#err").hidden = true;
+    CACHE.summary_bhk = s.bhk || {};
+    if ($("#total")) $("#total").innerHTML = `<i class="bi bi-layers-fill"></i> Total: ${s.total ?? 0} Leads`;
+    // Update sidebar notification badges
+    const calBadge = $("#sideNavCalBadge");
+    if (calBadge) calBadge.textContent = s.cards?.hot_leads_total || (CACHE.calendly ? CACHE.calendly.length : 9);
+    const convBadge = $("#sideNavConvBadge");
+    if (convBadge) convBadge.textContent = s.cards?.conversations_total || (CACHE.conversations ? CACHE.conversations.length : 25);
+
+    // Render bar chart & heatmap
+    renderBarChart();
+    renderHeatmap();
+
+    // Update Lead Analytics for Property Sales
+    const totalLeads = (s.total || 0);
+    const hotLeads = (s.cards?.hot_leads_total || 0);
+    const convRate = totalLeads > 0 ? Math.round((hotLeads / totalLeads) * 100) : 67;
+
+    const revEl = $("#analyticsRevVal");
+    if (revEl) revEl.textContent = totalLeads > 0 ? totalLeads : "248";
+    const expEl = $("#analyticsExpVal");
+    if (expEl) expEl.textContent = hotLeads > 0 ? hotLeads : "86";
+    const profitEl = $("#analyticsProfitVal");
+    if (profitEl) profitEl.textContent = `+${convRate}%`;
+
+    // Update Buyer Intent & Qualification tiles
+    const immEl = $("#leadImmediateVal");
+    if (immEl) immEl.textContent = s.cards?.immediate ?? 38;
+    const cashEl = $("#leadCashVal");
+    if (cashEl) cashEl.textContent = s.cards?.cash ?? 24;
+    const hbEl = $("#leadHighBudgetVal");
+    if (hbEl) hbEl.textContent = s.cards?.high_budget ?? 19;
+    const newTodayEl = $("#pipelineNewTodayVal");
+    if (newTodayEl) newTodayEl.textContent = s.cards?.new_today ?? 14;
+    const hotRateEl = $("#pipelineHotRateVal");
+    if (hotRateEl) hotRateEl.textContent = `${convRate}%`;
+
+    if ($("#cards")) {
+      $("#cards").innerHTML = CARDS.map(([k, label, ic, bg, fg, pill]) => `
+        <div class="card" style="--bg:${bg};--ic:${fg};">
+          <div class="card-head">
+            <span class="ic"><i class="bi ${ic}"></i></span>
+            <span class="card-pill">${pill}</span>
+          </div>
+          <div class="card-val">${s.cards[k] ?? 0}</div>
+          <div class="card-title">${label}</div>
+        </div>`).join("");
+    }
+    if (typeof donut === "function") donut(CACHE.summary_bhk);
+    if (typeof renderLatestContact === "function") renderLatestContact(c || []);
+    if (typeof renderLatestEnquiries === "function") renderLatestEnquiries(e || []);
+    if ($("#err")) $("#err").hidden = true;
   } catch (err) {
     console.error(err);
-    $("#err").hidden = false;
+    if ($("#err")) $("#err").hidden = false;
   } finally {
     loadingDashboard = false;
   }
@@ -2664,6 +5584,8 @@ async function loadConversations() {
     const data = await api("/api/admin/conversations");
     CACHE.conversations = data;
     convTable(data);
+    const convBadge = $("#sideNavConvBadge");
+    if (convBadge) convBadge.textContent = data.length;
     $("#err").hidden = true;
   } catch (err) {
     console.error("Failed to load conversations:", err);
@@ -2747,6 +5669,48 @@ $("#view-conversations .search")?.addEventListener("input", e => {
   const rows = (CACHE.conversations || []).filter(r => JSON.stringify(r).toLowerCase().includes(q));
   convTable(rows);
 });
+$("#view-calendly .search")?.addEventListener("input", () => {
+  filterAndRenderCalendly();
+});
+
+// Manual Sync Calendly API Button
+$("#btnSyncCalendly")?.addEventListener("click", async function() {
+  const btn = this;
+  btn.disabled = true;
+  btn.classList.add("refreshing");
+  const icon = btn.querySelector("i");
+  if (icon) icon.classList.add("spin");
+  try {
+    const res = await api("/api/admin/calendly/sync", { method: "POST" });
+    await loadCalendlyLeads();
+    showAlert({
+      title: "Calendly Live Sync Complete",
+      message: `Checked Calendly API: ${res.synced_events || 0} scheduled appointments synced, ${res.matched_leads || 0} lead(s) updated to Lead Booked. Automated follow-up reminders are closed.`,
+      type: "success"
+    });
+  } catch (err) {
+    console.error("Calendly sync failed:", err);
+    showAlert({
+      title: "Sync Notice",
+      message: err.message || "Failed to sync with Calendly API. Please check your network or try again.",
+      type: "error"
+    });
+  } finally {
+    btn.disabled = false;
+    btn.classList.remove("refreshing");
+    if (icon) icon.classList.remove("spin");
+  }
+});
+
+// Filter pills for Calendly Bookings
+document.querySelectorAll("#calendlyFilterPills .pill").forEach(p => {
+  p.addEventListener("click", () => {
+    document.querySelectorAll("#calendlyFilterPills .pill").forEach(x => x.classList.remove("on"));
+    p.classList.add("on");
+    currentCalendlyFilter = p.dataset.filter || "all";
+    filterAndRenderCalendly();
+  });
+});
 
 // Refresh Functionality for every leads section
 async function refreshSection(viewKey, btn = null) {
@@ -2770,6 +5734,8 @@ async function refreshSection(viewKey, btn = null) {
         const rows = (CACHE.upsert || []).filter(r => JSON.stringify(r).toLowerCase().includes(q.toLowerCase()));
         upsertLeadsTable(rows);
       }
+    } else if (viewKey === "calendly") {
+      await loadCalendlyLeads();
     } else if (viewKey === "conversations") {
       await loadConversations();
       const q = $("#view-conversations .search")?.value?.trim();
@@ -2859,6 +5825,11 @@ document.body.addEventListener("click", e => {
     if (lead && lead.records && lead.records.length) {
       confirmBatchDelete(lead.records);
     }
+    return;
+  }
+  const delCal = e.target.closest(".del-cal-btn");
+  if (delCal) {
+    confirmDelete("calendly", delCal.dataset.id, delCal.dataset.name);
     return;
   }
 });
@@ -2966,6 +5937,22 @@ function updateDeleteButtons() {
     saConv.checked = convSel.length === convCbs.length;
     saConv.indeterminate = convSel.length > 0 && convSel.length < convCbs.length;
   }
+
+  // 6. Calendly Bookings view
+  const calCbs = Array.from(document.querySelectorAll("#calendlyTable .row-cb"));
+  const calSel = calCbs.filter(cb => cb.checked);
+  const btnCal = $("#delSelectedCalendly");
+  if (btnCal) {
+    btnCal.disabled = calSel.length === 0;
+    btnCal.classList.toggle("active", calSel.length > 0);
+    btnCal.innerHTML = `<i class="bi ${calSel.length > 0 ? 'bi-trash3-fill' : 'bi-trash3'}"></i>`;
+    btnCal.title = calSel.length ? `Delete ${calSel.length} selected lead${calSel.length > 1 ? "s" : ""} from Zoho CRM & Database` : "Select leads using checkboxes to delete";
+  }
+  const saCal = $("#calendlyTable .select-all");
+  if (saCal && calCbs.length) {
+    saCal.checked = calSel.length === calCbs.length;
+    saCal.indeterminate = calSel.length > 0 && calSel.length < calCbs.length;
+  }
 }
 
 document.addEventListener("change", e => {
@@ -3026,12 +6013,173 @@ $("#delSelectedUpsert")?.addEventListener("click", () => {
   }
 });
 
+$("#delSelectedCalendly")?.addEventListener("click", () => {
+  const selectedIds = Array.from(document.querySelectorAll("#calendlyTable .row-cb:checked")).map(cb => cb.dataset.id);
+  if (!selectedIds.length) return;
+  const items = selectedIds.map(id => ({ id, entity: "calendly" }));
+  confirmBatchDelete(items);
+});
+
+$("#calModalClose")?.addEventListener("click", closeCalModal);
+$("#calModalDone")?.addEventListener("click", closeCalModal);
+$("#calModalOverlay")?.addEventListener("click", e => {
+  if (e.target === $("#calModalOverlay")) closeCalModal();
+});
+
+// Event delegation for Calendly Bookings table
+$("#calendlyTable")?.addEventListener("click", e => {
+  const fBtn = e.target.closest(".btn-followup");
+  if (fBtn && !fBtn.disabled) {
+    sendFollowUpEmail(fBtn.dataset.id, fBtn);
+    return;
+  }
+  const vBtn = e.target.closest(".btn-view-cal");
+  if (vBtn) {
+    showCalendlyDetailsModal(vBtn.dataset.id);
+    return;
+  }
+  const extBtn = e.target.closest(".btn-extend-cal");
+  if (extBtn) {
+    openExtendDaysModal(extBtn.dataset.id);
+    return;
+  }
+  const dBtn = e.target.closest(".del-cal-btn");
+  if (dBtn) {
+    confirmDelete("calendly", dBtn.dataset.id, dBtn.dataset.name);
+    return;
+  }
+});
+
+let currentExtendLeadId = null;
+
+function openExtendDaysModal(leadId) {
+  const lead = (CACHE.calendly || []).find(r => r.id === leadId);
+  if (!lead) return;
+
+  if (lead.is_booked || lead.status === "Lead Booked") {
+    showAlert({
+      title: "Lead Already Booked",
+      message: `${lead.customer_name} has already booked their meeting. Follow-up reminders are closed.`,
+      type: "info",
+    });
+    return;
+  }
+
+  currentExtendLeadId = leadId;
+  const overlay = $("#extendDaysModalOverlay");
+  if (!overlay) return;
+
+  $("#extendCustName").textContent = lead.customer_name || "Valued Client";
+  $("#extendCustDetails").textContent = `${lead.email || "No email"} • ${lead.phone || "No phone"} • ${lead.days_old || 0} days old`;
+
+  const ext = lead.extended_days || 0;
+  $("#extendCurrentStatus").innerHTML = ext > 0
+    ? `<i class="bi bi-clock-history"></i> Current Schedule Extension: <b>+${ext} days</b> added (Threshold: ${7 + ext} days)`
+    : `<i class="bi bi-clock"></i> Standard 7-day follow-up window (No extension yet)`;
+
+  $("#extendDaysInput").value = "7";
+  $("#extendNoteInput").value = "";
+
+  document.querySelectorAll(".preset-day-btn").forEach(btn => {
+    if (btn.dataset.days === "7") {
+      btn.style.borderColor = "#2A9DAE";
+      btn.style.borderWidth = "2px";
+      btn.style.background = "rgba(42,157,174,0.1)";
+      btn.style.color = "#2A9DAE";
+    } else {
+      btn.style.borderColor = "var(--border)";
+      btn.style.borderWidth = "1px";
+      btn.style.background = "var(--card-bg,#fff)";
+      btn.style.color = "var(--text)";
+    }
+  });
+
+  overlay.hidden = false;
+}
+
+function closeExtendDaysModal() {
+  const overlay = $("#extendDaysModalOverlay");
+  if (overlay) overlay.hidden = true;
+  currentExtendLeadId = null;
+}
+
+document.querySelectorAll(".preset-day-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    const days = btn.dataset.days;
+    $("#extendDaysInput").value = days;
+    document.querySelectorAll(".preset-day-btn").forEach(b => {
+      if (b === btn) {
+        b.style.borderColor = "#2A9DAE";
+        b.style.borderWidth = "2px";
+        b.style.background = "rgba(42,157,174,0.1)";
+        b.style.color = "#2A9DAE";
+      } else {
+        b.style.borderColor = "var(--border)";
+        b.style.borderWidth = "1px";
+        b.style.background = "var(--card-bg,#fff)";
+        b.style.color = "var(--text)";
+      }
+    });
+  });
+});
+
+$("#extendDaysSubmitBtn")?.addEventListener("click", async () => {
+  if (!currentExtendLeadId) return;
+  const days = parseInt($("#extendDaysInput").value, 10);
+  if (isNaN(days) || days < 1 || days > 90) {
+    showAlert({
+      title: "Invalid Days",
+      message: "Please enter a valid number of days to extend (between 1 and 90).",
+      type: "error",
+    });
+    return;
+  }
+  const note = ($("#extendNoteInput").value || "").trim();
+
+  const submitBtn = $("#extendDaysSubmitBtn");
+  submitBtn.disabled = true;
+  submitBtn.innerHTML = `<span style="display:inline-block;animation:spin 0.8s linear infinite;"><i class="bi bi-arrow-repeat"></i></span> Saving...`;
+
+  try {
+    const res = await api(`/api/admin/calendly/extend-days/${encodeURIComponent(currentExtendLeadId)}`, {
+      method: "POST",
+      body: JSON.stringify({ days, note }),
+    });
+
+    closeExtendDaysModal();
+    showAlert({
+      title: "Follow-up Schedule Extended",
+      message: res.message || `Successfully added ${days} days to follow-up schedule.`,
+      type: "success",
+    });
+
+    await loadCalendlyLeads();
+  } catch (err) {
+    showAlert({
+      title: "Extension Failed",
+      message: err.message || "Failed to extend follow-up schedule.",
+      type: "error",
+    });
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.innerHTML = `<i class="bi bi-calendar-plus" style="margin-right:6px;"></i> Save &amp; Extend Schedule`;
+  }
+});
+
+$("#extendDaysClose")?.addEventListener("click", closeExtendDaysModal);
+$("#extendDaysCancel")?.addEventListener("click", closeExtendDaysModal);
+$("#extendDaysModalOverlay")?.addEventListener("click", e => {
+  if (e.target === $("#extendDaysModalOverlay")) closeExtendDaysModal();
+});
+
 // Delete confirmation modal
 let pendingDelete = null;
-function confirmDelete(entityKey, id) {
+function confirmDelete(entityKey, id, leadName = '') {
   pendingDelete = { entityKey, id };
   $("#confirmTitle").textContent = "Confirm Delete";
-  $("#confirmMessage").textContent = "Are you sure you want to delete this record? This action cannot be undone.";
+  $("#confirmMessage").textContent = leadName
+    ? `Are you sure you want to delete ${leadName}? This will permanently remove the record from Zoho CRM and the local database.`
+    : "Are you sure you want to delete this record? This action cannot be undone.";
   $("#confirmAccept").textContent = "Delete";
   $("#confirmOverlay").hidden = false;
 }
@@ -3039,7 +6187,7 @@ function confirmBatchDelete(items) {
   if (!items || !items.length) return;
   pendingDelete = { batch: true, items };
   $("#confirmTitle").textContent = `Delete ${items.length} Record${items.length > 1 ? "s" : ""}`;
-  $("#confirmMessage").textContent = `Are you sure you want to delete ${items.length} selected record${items.length > 1 ? "s" : ""}? This action cannot be undone.`;
+  $("#confirmMessage").textContent = `Are you sure you want to delete ${items.length} selected record${items.length > 1 ? "s" : ""}? This will permanently delete from Zoho CRM and database.`;
   $("#confirmAccept").textContent = `Delete ${items.length} record${items.length > 1 ? "s" : ""}`;
   $("#confirmOverlay").hidden = false;
 }
@@ -3054,7 +6202,7 @@ $("#confirmAccept").addEventListener("click", async () => {
   $("#confirmAccept").disabled = true;
   try {
     if (pendingDelete.batch) {
-      await api("/api/admin/leads/batch-delete", {
+      const res = await api("/api/admin/leads/batch-delete", {
         method: "POST",
         body: JSON.stringify({ items: pendingDelete.items }),
       });
@@ -3065,24 +6213,40 @@ $("#confirmAccept").addEventListener("click", async () => {
         loadConversations(),
         loadAllLeads(),
         loadUpsertLeads(),
+        loadCalendlyLeads(),
       ]);
       refreshDashboard();
       updateDeleteButtons();
+      showAlert({
+        title: "Batch Delete Complete",
+        message: res.message || "Selected records permanently deleted from Zoho CRM and database.",
+        type: "success"
+      });
     } else {
       const { entityKey, id } = pendingDelete;
       if (entityKey === "conversations" || entityKey === "conversation") {
         await api(`/api/admin/conversations/${id}`, { method: "DELETE" });
-      } else {
+      } else if (entityKey === "calendly" || entityKey === "upsert") {
+        await api(`/api/admin/calendly-leads/${id}`, { method: "DELETE" });
+      } else if (ENTITIES[entityKey]) {
         await api(`${ENTITIES[entityKey].api}/${id}`, { method: "DELETE" });
       }
       hideConfirm();
       if (entityKey === "contact") await loadTable("contact", "#contactTable");
       else if (entityKey === "enquiry") await loadTable("enquiry", "#enqTable");
       else if (entityKey === "conversations" || entityKey === "conversation") await loadConversations();
-      loadAllLeads();
-      loadUpsertLeads();
+      await Promise.all([
+        loadAllLeads(),
+        loadUpsertLeads(),
+        loadCalendlyLeads(),
+      ]);
       refreshDashboard();
       updateDeleteButtons();
+      showAlert({
+        title: "Lead Deleted",
+        message: "Record was permanently deleted from Zoho CRM and local database.",
+        type: "success"
+      });
     }
   } catch (err) {
     showAlert({ title: "Delete Failed", message: err.message, type: "error" });
@@ -3200,6 +6364,7 @@ loadTable("contact", "#contactTable");
 loadTable("enquiry", "#enqTable");
 loadAllLeads();
 loadUpsertLeads();
+loadCalendlyLeads();
 loadConversations();
 setTimeout(bindTableScrollListeners, 200);
 
@@ -3209,7 +6374,7 @@ async function autoRefreshLiveData() {
   if (isAutoRefreshing) return;
   // Do not interrupt user if searching, entering modal details, or selecting leads
   const isSearchActive = document.activeElement && document.activeElement.classList.contains("search");
-  const isModalOpen = ($("#modalOverlay") && !$("#modalOverlay").hidden) || ($("#chatModalOverlay") && !$("#chatModalOverlay").hidden);
+  const isModalOpen = ($("#modalOverlay") && !$("#modalOverlay").hidden) || ($("#chatModalOverlay") && !$("#chatModalOverlay").hidden) || ($("#calModalOverlay") && !$("#calModalOverlay").hidden) || ($("#extendDaysModalOverlay") && !$("#extendDaysModalOverlay").hidden);
   const hasSelectedLeads = document.querySelectorAll(".row-cb:checked").length > 0;
   if (isSearchActive || isModalOpen || hasSelectedLeads) return;
 

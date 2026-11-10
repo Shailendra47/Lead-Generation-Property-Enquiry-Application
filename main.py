@@ -8,6 +8,7 @@ import os
 import re
 import secrets
 import smtplib
+import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -17,7 +18,7 @@ from urllib.parse import quote_plus, urlsplit
 import urllib.request
 import urllib.error
 
-from typing import Any
+from typing import Any, Optional
 
 import phonenumbers
 from phonenumbers import NumberParseException
@@ -37,7 +38,7 @@ from twilio.request_validator import RequestValidator
 from location_service import is_verified_place, photon_locations, verified_locations
 
 load_dotenv()
-from zoho_crm import sync_zoho_lead, sync_upserted_lead_to_zoho
+from zoho_crm import sync_zoho_lead, sync_upserted_lead_to_zoho, delete_zoho_lead
 from conversation_ai import (
     is_ai_configured,
     execute_hybrid_ai_turn,
@@ -301,6 +302,14 @@ if not SESSION_SECRET:
     )
 
 
+# Forward function stubs for background workers referenced in lifespan (re-defined below)
+async def auto_zoho_sync_background_worker(app_state: Any) -> None:
+    pass
+
+async def auto_calendly_followup_background_worker(app_state: Any) -> None:
+    pass
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     if not MONGODB_URI:
@@ -340,13 +349,15 @@ async def lifespan(app: FastAPI):
         app.state.upserted_leads.create_index("zoho_sync_status"),
         app.state.upserted_leads.create_index("zoho_lead_id"),
     )
-    # Start standing autonomous background worker for zero-touch Zoho CRM auto-sync
+    # Start standing autonomous background workers
     sync_worker = asyncio.create_task(auto_zoho_sync_background_worker(app.state))
+    calendly_worker = asyncio.create_task(auto_calendly_followup_background_worker(app.state))
     yield
     sync_worker.cancel()
+    calendly_worker.cancel()
     try:
-        await sync_worker
-    except asyncio.CancelledError:
+        await asyncio.gather(sync_worker, calendly_worker, return_exceptions=True)
+    except Exception:
         pass
     await client.close()
 
@@ -525,6 +536,470 @@ def send_salesperson_notification(subject: str, fields: dict[str, object]) -> No
             server.send_message(msg)
     except Exception:
         logger.exception("Could not send salesperson notification")
+
+
+def send_calendly_followup_email(
+    name: str,
+    to_email: str,
+    followup_stage: int,
+    property_summary: str = "",
+    booking_url: str = "",
+    visit_url: str = "",
+) -> bool:
+    """Send automated or manual Calendly booking follow-up email.
+    
+    Stages:
+    - Stage 1 (Day 1 / Initial): After submit / click - exclusive consultation invitation.
+    - Stage 2 (Day 3): Reminder check-in - prime consultation & site visit slots filling.
+    - Stage 3 (Day 7): Final notice - priority reservation expires today before CRM queue removal.
+    """
+    if not (SMTP_USER and SMTP_PASSWORD):
+        logger.warning("SMTP_USER / SMTP_PASSWORD not set - follow-up email skipped.")
+        return False
+
+    customer_name = (name or "Valued Client").strip()
+    cal_url = booking_url or CALENDLY_URL
+    v_url = visit_url or CALENDLY_VISIT_URL or CALENDLY_URL
+
+    pref_html = ""
+    if property_summary and property_summary != "-":
+        pref_html = (
+            f'<div style="background:#f1f5f9;border-left:4px solid #2A9DAE;padding:12px 16px;border-radius:6px;margin:18px 0;">'
+            f'<p style="margin:0;font-size:12px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;">Your Recorded Property Preferences</p>'
+            f'<p style="margin:5px 0 0 0;font-size:15px;color:#1e293b;font-weight:600;line-height:1.4;">{html.escape(property_summary)}</p>'
+            f'</div>'
+        )
+
+    if followup_stage == 1:
+        subject = f"Exclusive Property Consultation — Reserve Your Preferred Slot with Profilent"
+        heading = f"Hello {html.escape(customer_name)},"
+        p1 = "Thank you for your high interest in Profilent real estate properties. Our team has received your enquiry and prepared priority matching options tailored to your criteria."
+        p2 = "To ensure you receive personalized attention and direct access to off-market inventory, please reserve your preferred consultation slot with our senior property specialist:"
+        btn_label = "📅 Schedule Online Consultation (30 Min)"
+        extra_note = "Booking takes less than 30 seconds and guarantees dedicated 1-on-1 advisory with our specialists."
+    elif followup_stage == 2:
+        subject = f"Quick Follow-up: Have You Picked a Time for Your Property Consultation, {customer_name}?"
+        heading = f"Dear {html.escape(customer_name)},"
+        p1 = "I wanted to follow up briefly regarding your property enquiry with Profilent. Prime consultation and private site visit slots for this week are filling quickly."
+        p2 = "Our senior property advisor has curated a short list of verified properties in Uttarakhand aligning with your requirements. We would love to walk you through the details at a time that works best for you:"
+        btn_label = "📅 Choose Your Consultation Slot"
+        extra_note = "Lock in your preferred appointment today to review available plots, villas, and apartments before general release."
+    else:  # Stage 3 (Day 7)
+        subject = f"Final Notice: Priority Consultation Reservation for {customer_name} — Profilent"
+        heading = f"Dear {html.escape(customer_name)},"
+        p1 = "This is our final courtesy follow-up regarding your property enquiry. Our specialists hold priority client reservation files for 7 days."
+        p2 = "Because we haven't received your consultation booking, your active reservation is scheduled to be closed and removed from our active priority queue today. If you are still seeking verified properties in Uttarakhand, you can still claim your slot using the link below:"
+        btn_label = "⚡ Reserve Your Consultation Before It Closes"
+        extra_note = "If your property search plans have changed or you have already found a property, no action is needed — your record will be gracefully removed from our CRM."
+
+    tel = re.sub(r"[^\d+]", "", AGENT_PHONE) if AGENT_PHONE else ""
+    phone_section = (
+        f'<p style="margin:20px 0 0 0;font-size:14px;color:#475569;">Prefer an immediate phone conversation? Call our property desk directly at '
+        f'<a href="tel:{tel}" style="color:#2A9DAE;font-weight:bold;text-decoration:none;">{html.escape(AGENT_PHONE)}</a>.</p>'
+        if AGENT_PHONE else ""
+    )
+
+    body_html = f"""<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1e293b;background:#f8fafc;padding:24px 12px;margin:0;">
+  <div style="max-width:620px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 12px rgba(0,0,0,0.06);border:1px solid #e2e8f0;">
+    <div style="background:#2A9DAE;padding:24px 30px;color:#ffffff;">
+      <h1 style="margin:0;font-size:22px;letter-spacing:0.5px;font-weight:700;">PROFILENT</h1>
+      <p style="margin:4px 0 0 0;font-size:13px;opacity:0.9;">Nurturing Trust &bull; Premium Real Estate Advisory</p>
+    </div>
+    <div style="padding:32px 30px;">
+      <h2 style="margin:0 0 16px 0;font-size:18px;color:#0f172a;">{heading}</h2>
+      <p style="margin:0 0 14px 0;font-size:15px;line-height:1.6;color:#334155;">{p1}</p>
+      {pref_html}
+      <p style="margin:14px 0 20px 0;font-size:15px;line-height:1.6;color:#334155;">{p2}</p>
+      
+      <div style="text-align:center;margin:28px 0;">
+        <a href="{html.escape(cal_url, quote=True)}" style="display:inline-block;background:#2A9DAE;color:#ffffff;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px;box-shadow:0 3px 6px rgba(42,157,174,0.3);">{btn_label}</a>
+      </div>
+
+      <div style="background:#f8fafc;border:1px dashed #cbd5e1;border-radius:8px;padding:14px 18px;margin:20px 0;text-align:center;">
+        <span style="font-size:14px;color:#475569;display:block;margin-bottom:8px;">Planning an in-person site visit?</span>
+        <a href="{html.escape(v_url, quote=True)}" style="display:inline-block;background:#0f172a;color:#ffffff;padding:10px 20px;border-radius:6px;text-decoration:none;font-size:13px;font-weight:600;">📍 Book In-Person Site Visit</a>
+      </div>
+
+      <p style="font-size:13px;color:#64748b;line-height:1.5;margin:16px 0;">{extra_note}</p>
+      {phone_section}
+
+      <div style="margin-top:30px;padding-top:20px;border-top:1px solid #e2e8f0;font-size:14px;color:#64748b;">
+        <p style="margin:0;">Warm regards,<br><strong style="color:#0f172a;">{html.escape(SENDER_NAME)}</strong><br>Property Specialist Team &bull; Profilent</p>
+      </div>
+    </div>
+  </div>
+</body>
+</html>"""
+
+    body_text = f"""{customer_name},
+
+{p1}
+
+{property_summary if property_summary and property_summary != '-' else ''}
+
+{p2}
+
+Schedule a Consultation:
+{cal_url}
+
+Book Site Visit:
+{v_url}
+
+{extra_note}
+
+Warm regards,
+{SENDER_NAME}
+Profilent Team
+"""
+
+    msg = EmailMessage()
+    msg["Subject"] = subject
+    msg["From"] = f"{SENDER_NAME} <{SMTP_USER}>"
+    msg["To"] = to_email
+    msg.set_content(body_text)
+    msg.add_alternative(body_html, subtype="html")
+
+    try:
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=20) as server:
+            server.starttls()
+            server.login(SMTP_USER, SMTP_PASSWORD)
+            server.send_message(msg)
+        logger.info("Calendly follow-up stage %d email successfully sent to %s", followup_stage, to_email)
+        return True
+    except Exception:
+        logger.exception("Failed to send Calendly follow-up email to %s", to_email)
+        return False
+
+
+def send_salesperson_day7_hotlead_alert(lead: dict) -> bool:
+    """Send an urgent alert email to the salesperson to immediately call a HOT LEAD
+    who has not scheduled an appointment after 7 days and 3 automated follow-ups.
+    """
+    to_sales = SALES_EMAIL or SMTP_USER
+    if not (SMTP_USER and SMTP_PASSWORD and to_sales):
+        logger.warning("Salesperson Day 7 alert skipped: configure SMTP and SALES_EMAIL.")
+        return False
+
+    customer_name = (
+        lead.get("full_name")
+        or f"{lead.get('first_name', '')} {lead.get('last_name', '')}".strip()
+        or "Valued Client"
+    )
+    phone = lead.get("phone") or "Not provided"
+    clean_digits = re.sub(r"\D", "", phone)[-10:] if phone else ""
+    email = lead.get("email") or "Not provided"
+    lead_score = lead.get("lead_score") or 85
+    timeline = lead.get("planning_to_buy") or "Within 1 Month"
+    budget = lead.get("budget_range") or "Not specified"
+    location = lead.get("location_preference") or "Not specified"
+    bhk = lead.get("bhk_preference") or "Not specified"
+    pref_summary = lead.get("property_summary") or lead.get("requirement") or "Uttarakhand Property Consultation"
+    zoho_id = lead.get("zoho_lead_id") or "Active in CRM"
+
+    wa_link = f"https://wa.me/{clean_digits}" if len(clean_digits) >= 10 else "#"
+    tel_link = f"tel:{phone}" if phone and phone != "Not provided" else "#"
+
+    subject = f"🚨 ACTION REQUIRED: Call Hot Lead {customer_name} ({phone}) — 7 Days Unbooked [Profilent]"
+
+    body_html = f"""<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1e293b;background:#f8fafc;padding:24px 12px;margin:0;">
+  <div style="max-width:640px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,0.08);border:1px solid #e2e8f0;">
+    <div style="background:linear-gradient(135deg, #dc2626 0%, #991b1b 100%);padding:22px 28px;color:#ffffff;">
+      <div style="display:inline-block;background:rgba(255,255,255,0.2);padding:4px 10px;border-radius:20px;font-size:12px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;margin-bottom:8px;">
+        ⚠️ URGENT HOT LEAD CALL DISPATCH
+      </div>
+      <h1 style="margin:0;font-size:20px;font-weight:800;letter-spacing:-0.02em;">Call Customer: {html.escape(customer_name)}</h1>
+      <p style="margin:6px 0 0 0;font-size:13px;opacity:0.95;">Customer is rated as a <strong>HOT LEAD</strong> but has not booked an appointment after 7 days and 3 email reminders.</p>
+    </div>
+
+    <div style="padding:18px 28px;background:#fef2f2;border-bottom:1px solid #fee2e2;">
+      <p style="margin:0 0 10px 0;font-size:14px;font-weight:700;color:#991b1b;">Immediate Telephone Outreach Recommended:</p>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;">
+        <a href="{html.escape(tel_link)}" style="display:inline-block;background:#dc2626;color:#ffffff;padding:12px 22px;border-radius:8px;font-weight:700;font-size:14px;text-decoration:none;box-shadow:0 2px 6px rgba(220,38,38,0.3);">
+          📞 Call {html.escape(phone)}
+        </a>
+        {f'<a href="{html.escape(wa_link)}" style="display:inline-block;background:#25d366;color:#ffffff;padding:12px 20px;border-radius:8px;font-weight:700;font-size:14px;text-decoration:none;">💬 WhatsApp Message</a>' if len(clean_digits) >= 10 else ''}
+      </div>
+    </div>
+
+    <div style="padding:28px;">
+      <h3 style="margin:0 0 14px 0;font-size:16px;color:#0f172a;">Hot Lead Profile</h3>
+      <table style="width:100%;border-collapse:collapse;font-size:14px;">
+        <tr>
+          <td style="padding:8px 0;color:#64748b;width:150px;border-bottom:1px solid #f1f5f9;"><strong>Lead Rating:</strong></td>
+          <td style="padding:8px 0;color:#dc2626;font-weight:700;border-bottom:1px solid #f1f5f9;">🔥 HOT LEAD (Score: {lead_score}/100)</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 0;color:#64748b;border-bottom:1px solid #f1f5f9;"><strong>Customer Name:</strong></td>
+          <td style="padding:8px 0;color:#0f172a;font-weight:600;border-bottom:1px solid #f1f5f9;">{html.escape(customer_name)}</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 0;color:#64748b;border-bottom:1px solid #f1f5f9;"><strong>Phone Number:</strong></td>
+          <td style="padding:8px 0;color:#0f172a;font-weight:600;border-bottom:1px solid #f1f5f9;">{html.escape(phone)}</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 0;color:#64748b;border-bottom:1px solid #f1f5f9;"><strong>Email Address:</strong></td>
+          <td style="padding:8px 0;color:#0f172a;border-bottom:1px solid #f1f5f9;"><a href="mailto:{html.escape(email)}" style="color:#2A9DAE;">{html.escape(email)}</a></td>
+        </tr>
+        <tr>
+          <td style="padding:8px 0;color:#64748b;border-bottom:1px solid #f1f5f9;"><strong>Purchase Timeline:</strong></td>
+          <td style="padding:8px 0;color:#0f172a;font-weight:600;border-bottom:1px solid #f1f5f9;">{html.escape(timeline)}</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 0;color:#64748b;border-bottom:1px solid #f1f5f9;"><strong>Budget Range:</strong></td>
+          <td style="padding:8px 0;color:#0f172a;border-bottom:1px solid #f1f5f9;">{html.escape(budget)}</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 0;color:#64748b;border-bottom:1px solid #f1f5f9;"><strong>Location:</strong></td>
+          <td style="padding:8px 0;color:#0f172a;border-bottom:1px solid #f1f5f9;">{html.escape(location)}</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 0;color:#64748b;border-bottom:1px solid #f1f5f9;"><strong>Property Type / BHK:</strong></td>
+          <td style="padding:8px 0;color:#0f172a;border-bottom:1px solid #f1f5f9;">{html.escape(bhk)}</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 0;color:#64748b;border-bottom:1px solid #f1f5f9;"><strong>Preferences / Query:</strong></td>
+          <td style="padding:8px 0;color:#0f172a;border-bottom:1px solid #f1f5f9;">{html.escape(pref_summary)}</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 0;color:#64748b;"><strong>Zoho CRM Record:</strong></td>
+          <td style="padding:8px 0;color:#0f172a;">{html.escape(str(zoho_id))} (Admin has full manual deletion control in Admin Panel)</td>
+        </tr>
+      </table>
+
+      <div style="background:#f1f5f9;border-left:4px solid #dc2626;padding:14px 16px;border-radius:6px;margin:22px 0 0 0;">
+        <p style="margin:0;font-size:13px;color:#334155;line-height:1.5;">
+          <strong>Action Directive:</strong> The final automated Day 7 email has been sent to the customer. Direct telephone intervention is now required to connect with this hot buyer. The lead is flagged in the Admin Panel for administrator review.
+        </p>
+      </div>
+    </div>
+
+    <div style="background:#f8fafc;padding:16px 28px;border-top:1px solid #e2e8f0;font-size:12px;color:#64748b;text-align:center;">
+      Profilent CRM Automated Sales Intelligence &bull; Uttarakhand Real Estate
+    </div>
+  </div>
+</body>
+</html>"""
+
+    body_text = f"""URGENT ACTION REQUIRED: Call Hot Lead {customer_name} ({phone})
+Customer has not scheduled an appointment after 7 days and 3 automated follow-ups.
+
+Customer Details:
+- Name: {customer_name}
+- Phone: {phone}
+- Email: {email}
+- Lead Rating: HOT LEAD ({lead_score}/100)
+- Timeline: {timeline}
+- Budget: {budget}
+- Location: {location}
+- BHK: {bhk}
+- Preferences: {pref_summary}
+
+Please call the customer immediately.
+"""
+
+    msg = EmailMessage()
+    msg["Subject"] = subject
+    msg["From"] = f"{SENDER_NAME} <{SMTP_USER}>"
+    msg["To"] = to_sales
+    msg.set_content(body_text)
+    msg.add_alternative(body_html, subtype="html")
+
+    try:
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=20) as server:
+            server.starttls()
+            server.login(SMTP_USER, SMTP_PASSWORD)
+            server.send_message(msg)
+        logger.info("Salesperson Day 7 Hot Lead call alert email sent to %s for lead %s", to_sales, customer_name)
+        return True
+    except Exception:
+        logger.exception("Failed to send salesperson Day 7 alert to %s", to_sales)
+        return False
+
+
+def send_salesperson_meeting_booked_email(lead: dict, booking: dict = None) -> bool:
+    """Send an alert email to the salesperson when a customer books a meeting via Calendly.
+    Notifies that the lead is booked and that automated reminders have been closed.
+    """
+    to_sales = SALES_EMAIL or SMTP_USER
+    if not (SMTP_USER and SMTP_PASSWORD and to_sales):
+        logger.warning("Salesperson Meeting Booked alert skipped: configure SMTP and SALES_EMAIL.")
+        return False
+
+    customer_name = (
+        lead.get("full_name")
+        or f"{lead.get('first_name', '')} {lead.get('last_name', '')}".strip()
+        or (booking.get("invitee_name") if booking else "")
+        or "Valued Client"
+    )
+    phone = lead.get("phone") or (booking.get("invitee_phone") if booking else "") or "Not provided"
+    clean_digits = re.sub(r"\D", "", phone)[-10:] if phone else ""
+    email = lead.get("email") or (booking.get("invitee_email") if booking else "") or "Not provided"
+    lead_score = lead.get("lead_score") or 90
+    timeline = lead.get("planning_to_buy") or "Within 1 Month"
+    budget = lead.get("budget_range") or "Not specified"
+    location = lead.get("location_preference") or "Not specified"
+    bhk = lead.get("bhk_preference") or "Not specified"
+    pref_summary = lead.get("property_summary") or lead.get("requirement") or "Uttarakhand Property Consultation"
+    zoho_id = lead.get("zoho_lead_id") or "Active in CRM"
+
+    b = booking or lead.get("calendly_booking") or {}
+    event_name = b.get("event_name") or b.get("event_type_name") or "Property Consultation (Calendly)"
+
+    # Format appointment time cleanly
+    raw_time = b.get("start_time") or b.get("event_start_time") or lead.get("appointment_time") or ""
+    display_time_str = "Scheduled on Calendly"
+    if raw_time:
+        try:
+            instant = datetime.fromisoformat(str(raw_time).replace("Z", "+00:00"))
+            tz_str = str(b.get("timezone") or "Asia/Kolkata")
+            try:
+                display_time_str = instant.astimezone(ZoneInfo(tz_str)).strftime("%a %d %b %Y, %I:%M %p %Z")
+            except Exception:
+                display_time_str = instant.strftime("%a %d %b %Y, %I:%M %p UTC")
+        except Exception:
+            display_time_str = str(raw_time)
+
+    join_url = b.get("join_url") or (b.get("location", {}).get("join_url") if isinstance(b.get("location"), dict) else "") or CALENDLY_URL
+
+    wa_link = f"https://wa.me/{clean_digits}" if len(clean_digits) >= 10 else "#"
+    tel_link = f"tel:{phone}" if phone and phone != "Not provided" else "#"
+
+    subject = f"🤝 MEETING BOOKED: Calendly Consultation with {customer_name} ({phone})"
+
+    body_html = f"""<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1e293b;background:#f8fafc;padding:24px 12px;margin:0;">
+  <div style="max-width:640px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,0.08);border:1px solid #e2e8f0;">
+    <div style="background:linear-gradient(135deg, #059669 0%, #047857 100%);padding:22px 28px;color:#ffffff;">
+      <div style="display:inline-block;background:rgba(255,255,255,0.22);padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;margin-bottom:8px;">
+        🤝 LEAD BOOKED &bull; CONSULTATION SCHEDULED
+      </div>
+      <h1 style="margin:0;font-size:21px;font-weight:800;letter-spacing:-0.02em;">Meeting Booked: {html.escape(customer_name)}</h1>
+      <p style="margin:6px 0 0 0;font-size:13px;opacity:0.95;">Customer has booked a consultation via Calendly. <strong>All automated reminders are closed.</strong></p>
+    </div>
+
+    <div style="padding:18px 28px;background:#ecfdf5;border-bottom:1px solid #d1fae5;">
+      <div style="margin-bottom:12px;font-size:14px;color:#065f46;font-weight:700;display:flex;align-items:center;gap:6px;">
+        <span>📅 Scheduled Appointment:</span>
+        <span style="background:#ffffff;padding:4px 10px;border-radius:6px;border:1px solid #a7f3d0;color:#047857;">{html.escape(display_time_str)}</span>
+      </div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;">
+        <a href="{html.escape(tel_link)}" style="display:inline-block;background:#059669;color:#ffffff;padding:10px 18px;border-radius:8px;font-weight:700;font-size:13px;text-decoration:none;box-shadow:0 2px 6px rgba(5,150,105,0.3);">
+          📞 Call {html.escape(phone)}
+        </a>
+        {f'<a href="{html.escape(wa_link)}" style="display:inline-block;background:#25d366;color:#ffffff;padding:10px 18px;border-radius:8px;font-weight:700;font-size:13px;text-decoration:none;">💬 WhatsApp Message</a>' if len(clean_digits) >= 10 else ''}
+        {f'<a href="{html.escape(join_url)}" style="display:inline-block;background:#0f172a;color:#ffffff;padding:10px 18px;border-radius:8px;font-weight:700;font-size:13px;text-decoration:none;">🔗 Open Meeting Link</a>' if join_url else ''}
+      </div>
+    </div>
+
+    <div style="padding:28px;">
+      <h3 style="margin:0 0 14px 0;font-size:16px;color:#0f172a;">Client &amp; Booking Profile</h3>
+      <table style="width:100%;border-collapse:collapse;font-size:14px;">
+        <tr>
+          <td style="padding:8px 0;color:#64748b;width:155px;border-bottom:1px solid #f1f5f9;"><strong>Lead Status:</strong></td>
+          <td style="padding:8px 0;color:#059669;font-weight:700;border-bottom:1px solid #f1f5f9;">✅ LEAD BOOKED (Score: {lead_score}/100)</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 0;color:#64748b;border-bottom:1px solid #f1f5f9;"><strong>Customer Name:</strong></td>
+          <td style="padding:8px 0;color:#0f172a;font-weight:600;border-bottom:1px solid #f1f5f9;">{html.escape(customer_name)}</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 0;color:#64748b;border-bottom:1px solid #f1f5f9;"><strong>Phone Number:</strong></td>
+          <td style="padding:8px 0;color:#0f172a;font-weight:600;border-bottom:1px solid #f1f5f9;">{html.escape(phone)}</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 0;color:#64748b;border-bottom:1px solid #f1f5f9;"><strong>Email Address:</strong></td>
+          <td style="padding:8px 0;color:#0f172a;border-bottom:1px solid #f1f5f9;"><a href="mailto:{html.escape(email)}" style="color:#2A9DAE;">{html.escape(email)}</a></td>
+        </tr>
+        <tr>
+          <td style="padding:8px 0;color:#64748b;border-bottom:1px solid #f1f5f9;"><strong>Event Type:</strong></td>
+          <td style="padding:8px 0;color:#0f172a;font-weight:600;border-bottom:1px solid #f1f5f9;">{html.escape(event_name)}</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 0;color:#64748b;border-bottom:1px solid #f1f5f9;"><strong>Scheduled Slot:</strong></td>
+          <td style="padding:8px 0;color:#059669;font-weight:700;border-bottom:1px solid #f1f5f9;">{html.escape(display_time_str)}</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 0;color:#64748b;border-bottom:1px solid #f1f5f9;"><strong>Purchase Timeline:</strong></td>
+          <td style="padding:8px 0;color:#0f172a;font-weight:600;border-bottom:1px solid #f1f5f9;">{html.escape(timeline)}</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 0;color:#64748b;border-bottom:1px solid #f1f5f9;"><strong>Budget Range:</strong></td>
+          <td style="padding:8px 0;color:#0f172a;border-bottom:1px solid #f1f5f9;">{html.escape(budget)}</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 0;color:#64748b;border-bottom:1px solid #f1f5f9;"><strong>Location Preference:</strong></td>
+          <td style="padding:8px 0;color:#0f172a;border-bottom:1px solid #f1f5f9;">{html.escape(location)}</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 0;color:#64748b;border-bottom:1px solid #f1f5f9;"><strong>Property Type / BHK:</strong></td>
+          <td style="padding:8px 0;color:#0f172a;border-bottom:1px solid #f1f5f9;">{html.escape(bhk)}</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 0;color:#64748b;border-bottom:1px solid #f1f5f9;"><strong>Preferences / Query:</strong></td>
+          <td style="padding:8px 0;color:#0f172a;border-bottom:1px solid #f1f5f9;">{html.escape(pref_summary)}</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 0;color:#64748b;"><strong>Zoho CRM Record:</strong></td>
+          <td style="padding:8px 0;color:#0f172a;">{html.escape(str(zoho_id))}</td>
+        </tr>
+      </table>
+
+      <div style="background:#ecfdf5;border-left:4px solid #059669;padding:14px 16px;border-radius:6px;margin:22px 0 0 0;">
+        <p style="margin:0;font-size:13px;color:#065f46;line-height:1.5;">
+          <strong>Action Directive:</strong> Customer has successfully booked their consultation call via Calendly. All automated follow-up reminder cycles have been automatically closed. Please review your calendar, prepare the curated Uttarakhand property portfolio for this client, and attend the scheduled consultation.
+        </p>
+      </div>
+    </div>
+
+    <div style="background:#f8fafc;padding:16px 28px;border-top:1px solid #e2e8f0;font-size:12px;color:#64748b;text-align:center;">
+      Profilent Real Estate Advisory &bull; Automated Booking Notification to Sales Desk
+    </div>
+  </div>
+</body>
+</html>"""
+
+    body_text = f"""MEETING BOOKED: Calendly Consultation
+Customer: {customer_name}
+Phone: {phone}
+Email: {email}
+Scheduled Slot: {display_time_str}
+Event: {event_name}
+Location: {location}
+Budget: {budget}
+BHK: {bhk}
+Timeline: {timeline}
+Preferences: {pref_summary}
+Zoho ID: {zoho_id}
+
+Action Directive: Customer has booked their consultation via Calendly. All automated reminders are now closed. Review your calendar and prepare property options for consultation.
+"""
+
+    msg = EmailMessage()
+    msg["Subject"] = subject
+    msg["From"] = f"{SENDER_NAME} <{SMTP_USER}>"
+    msg["To"] = to_sales
+    msg.set_content(body_text)
+    msg.add_alternative(body_html, subtype="html")
+
+    try:
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=20) as server:
+            server.starttls()
+            server.login(SMTP_USER, SMTP_PASSWORD)
+            server.send_message(msg)
+        logger.info("Meeting booked email successfully sent to salesperson %s for %s", to_sales, customer_name)
+        return True
+    except Exception:
+        logger.exception("Failed to send Meeting Booked email to salesperson %s", to_sales)
+        return False
+
 
 
 async def process_contact_submission(
@@ -1147,7 +1622,12 @@ async def admin_summary():
     start = datetime.now(IST).replace(hour=0, minute=0, second=0, microsecond=0)
     start_utc = start.astimezone(timezone.utc)
     today = {"created_at": {"$gte": start_utc}}
-    contacts, enquiries, conversations = app.state.contacts, app.state.enquiries, app.state.whatsapp_conversations
+    contacts, enquiries, conversations, upserted = (
+        app.state.contacts,
+        app.state.enquiries,
+        app.state.whatsapp_conversations,
+        app.state.upserted_leads,
+    )
     (
         contacts_total,
         enquiries_total,
@@ -1157,6 +1637,7 @@ async def admin_summary():
         immediate,
         cash,
         high_budget,
+        hot_leads_total,
         bhk_cursor,
     ) = await asyncio.gather(
         contacts.count_documents({}),
@@ -1167,6 +1648,7 @@ async def admin_summary():
         enquiries.count_documents({"planning_to_buy": {"$in": ["Immediately", "Within 1 Month"]}}),
         enquiries.count_documents({"payment_option": "Full Cash Payment"}),
         enquiries.count_documents({"budget_range": {"$in": ["1 crore - 2 crore", "Above 2 crore"]}}),
+        upserted.count_documents({"lead_rating": "Hot"}),
         enquiries.aggregate([
             {"$group": {"_id": "$bhk_preference", "count": {"$sum": 1}}},
             {"$sort": {"count": -1}},
@@ -1180,6 +1662,7 @@ async def admin_summary():
             "contacts_total": contacts_total,
             "enquiries_total": enquiries_total,
             "conversations_total": conversations_total,
+            "hot_leads_total": hot_leads_total,
             "immediate": immediate,
             "cash": cash,
             "high_budget": high_budget,
@@ -1467,6 +1950,21 @@ def build_upserted_leads(
                 "zoho_lead_id": None,
                 "zoho_sync_status": None,
                 "zoho_sync_reason": None,
+                "calendly_booking": None,
+                "calendly_clicked": False,
+                "calendly_clicked_at": None,
+                "calendly_click_type": "",
+                "calendly_followup_stage": 0,
+                "calendly_last_followup_at": None,
+                "crm_deleted": False,
+                "crm_deleted_at": None,
+                "followup_extended_days": 0,
+                "followup_extended_at": None,
+                "followup_extended_note": "",
+                "is_booked": False,
+                "reminders_closed": False,
+                "salesperson_booking_notified": False,
+                "salesperson_booking_notified_at": None,
             }
 
         if email_key:
@@ -1569,6 +2067,21 @@ def build_upserted_leads(
         elif not g["zoho_sync_status"] and d.get("zoho_sync_status"):
             g["zoho_sync_status"] = d.get("zoho_sync_status")
             g["zoho_sync_reason"] = d.get("zoho_sync_reason")
+
+        for cal_f in [
+            "calendly_booking", "calendly_clicked", "calendly_clicked_at",
+            "calendly_click_type", "calendly_followup_stage", "calendly_last_followup_at",
+            "crm_deleted", "crm_deleted_at",
+            "followup_extended_days", "followup_extended_at", "followup_extended_note",
+            "is_booked", "reminders_closed", "salesperson_booking_notified", "salesperson_booking_notified_at"
+        ]:
+            if d.get(cal_f) is not None:
+                if cal_f in {"calendly_followup_stage", "followup_extended_days"}:
+                    g[cal_f] = max(int(g.get(cal_f) or 0), int(d.get(cal_f) or 0))
+                elif isinstance(d.get(cal_f), bool):
+                    g[cal_f] = bool(g.get(cal_f) or d.get(cal_f))
+                elif not g.get(cal_f):
+                    g[cal_f] = d.get(cal_f)
 
     result = []
     for g in groups.values():
@@ -1752,8 +2265,32 @@ async def sync_and_save_upserted_leads(app_state, background_tasks: BackgroundTa
             except Exception as e:
                 logger.warning("Could not generate AI analysis for lead %s: %s", lead_id, e)
 
+        # Preserve Calendly booking and follow-up tracking states
+        if existing:
+            for cal_f in [
+                "calendly_booking", "calendly_clicked", "calendly_clicked_at",
+                "calendly_click_type", "calendly_followup_stage", "calendly_last_followup_at",
+                "crm_deleted", "crm_deleted_at",
+                "followup_extended_days", "followup_extended_at", "followup_extended_note",
+                "is_booked", "reminders_closed", "salesperson_booking_notified", "salesperson_booking_notified_at"
+            ]:
+                if cal_f in {"calendly_followup_stage", "followup_extended_days"}:
+                    lead[cal_f] = max(int(lead.get(cal_f) or 0), int(existing.get(cal_f) or 0))
+                elif existing.get(cal_f) is not None and lead.get(cal_f) is None:
+                    lead[cal_f] = existing.get(cal_f)
+                elif existing.get(cal_f) is not None and isinstance(existing.get(cal_f), bool) and existing.get(cal_f):
+                    lead[cal_f] = True
+                elif existing.get(cal_f) and not lead.get(cal_f):
+                    lead[cal_f] = existing.get(cal_f)
+
         # 3. Preserve Zoho sync state for Hot leads; keep Cold leads strictly filtered
-        if lead.get("lead_rating") == "Hot":
+        if lead.get("crm_deleted") or (existing and existing.get("crm_deleted")):
+            lead["crm_deleted"] = True
+            lead["crm_deleted_at"] = (existing.get("crm_deleted_at") if existing else None) or now
+            lead["zoho_lead_id"] = None
+            lead["zoho_sync_status"] = "deleted_unbooked"
+            lead["zoho_sync_reason"] = "Unbooked after 7 days — automatically removed from Zoho CRM"
+        elif lead.get("lead_rating") == "Hot":
             if existing and existing.get("zoho_lead_id"):
                 ex_email = (existing.get("email") or "").strip().lower()
                 cur_email = (lead.get("email") or "").strip().lower()
@@ -2014,7 +2551,7 @@ class BatchDeleteRequest(BaseModel):
 async def admin_batch_delete_leads(payload: BatchDeleteRequest, background_tasks: BackgroundTasks):
     contact_ids = [oid(x["id"]) for x in payload.items if x.get("entity") == "contact" and x.get("id")]
     enquiry_ids = [oid(x["id"]) for x in payload.items if x.get("entity") in {"enquiry", "property"} and x.get("id")]
-    upsert_ids = [x["id"] for x in payload.items if x.get("entity") == "upsert" and x.get("id")]
+    upsert_ids = [x["id"] for x in payload.items if x.get("entity") in {"upsert", "calendly"} and x.get("id")]
     conversation_ids = [oid(x["id"]) for x in payload.items if x.get("entity") in {"conversation", "conversations"} and x.get("id")]
     deleted_count = 0
     if contact_ids:
@@ -2024,6 +2561,54 @@ async def admin_batch_delete_leads(payload: BatchDeleteRequest, background_tasks
         e_res = await app.state.enquiries.delete_many({"_id": {"$in": enquiry_ids}})
         deleted_count += e_res.deleted_count
     if upsert_ids:
+        for uid in upsert_ids:
+            try:
+                lead = await app.state.upserted_leads.find_one({"id": uid})
+                if lead:
+                    lead_email = (lead.get("email") or "").strip().lower()
+                    lead_phone = lead.get("phone") or ""
+                    digits = re.sub(r"\D", "", lead_phone)[-10:] if lead_phone else ""
+                    zoho_lead_id = lead.get("zoho_lead_id")
+                    from zoho_crm import delete_zoho_lead
+                    await run_in_threadpool(
+                        delete_zoho_lead,
+                        lead_id=zoho_lead_id,
+                        email=lead_email,
+                        phone=lead_phone,
+                        lead_doc=lead,
+                    )
+                    # Targeted deletion: delete only the specific underlying records linked to this lead
+                    record_items = lead.get("records") or []
+                    c_ids = [oid(r["id"]) for r in record_items if r.get("entity") == "contact" and r.get("id")]
+                    e_ids = [oid(r["id"]) for r in record_items if r.get("entity") in ("enquiry", "property") and r.get("id")]
+                    w_ids = [oid(r["id"]) for r in record_items if r.get("entity") in ("conversation", "conversations") and r.get("id")]
+
+                    if c_ids:
+                        await app.state.contacts.delete_many({"_id": {"$in": c_ids}})
+                    if e_ids:
+                        await app.state.enquiries.delete_many({"_id": {"$in": e_ids}})
+                    if w_ids:
+                        await app.state.whatsapp_conversations.delete_many({"_id": {"$in": w_ids}})
+                    elif lead_email and digits:
+                        # Require strict match on BOTH email and phone (never phone alone to prevent shared-phone wipes)
+                        exact_q = {
+                            "$and": [
+                                {"email": lead_email},
+                                {"$or": [
+                                    {"phone": {"$regex": f"{digits}$"}},
+                                    {"contact_number": {"$regex": f"{digits}$"}},
+                                    {"mobile_number": {"$regex": f"{digits}$"}}
+                                ]}
+                            ]
+                        }
+                        await app.state.contacts.delete_many(exact_q)
+                        await app.state.enquiries.delete_many(exact_q)
+                        await app.state.whatsapp_conversations.delete_many(exact_q)
+
+                    if lead_email:
+                        await app.state.calendly_webhook_events.delete_many({"invitee_email": lead_email})
+            except Exception as ex:
+                logger.debug("Batch delete zoho/local cleanup notice for %s: %s", uid, ex)
         u_res = await app.state.upserted_leads.delete_many({"id": {"$in": upsert_ids}})
         deleted_count += u_res.deleted_count
     if conversation_ids:
@@ -2051,6 +2636,821 @@ async def admin_sync_hot_upserted_leads(background_tasks: BackgroundTasks):
     summary = await run_in_threadpool(sync_all_hot_upserted_leads, sync_already_synced=True)
     background_tasks.add_task(sync_and_save_upserted_leads, app.state)
     return {"status": "success", "summary": summary}
+
+
+def _parse_lead_dt(val) -> datetime | None:
+    if isinstance(val, datetime):
+        return val if val.tzinfo else val.replace(tzinfo=timezone.utc)
+    if isinstance(val, str) and val:
+        try:
+            dt = datetime.fromisoformat(val.replace("Z", "+00:00"))
+            return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+        except Exception:
+            return None
+    return None
+
+
+async def _record_calendly_click(
+    app_state,
+    lead_id: str | None = None,
+    email: str | None = None,
+    phone: str | None = None,
+    click_type: str = "consultation",
+):
+    """Record customer click on Calendly booking or site visit links."""
+    now = datetime.now(timezone.utc)
+    email_clean = (email or "").strip().lower()
+    clean_digits = re.sub(r"\D", "", phone or "")[-10:] if phone else ""
+
+    update_doc = {
+        "calendly_clicked": True,
+        "calendly_clicked_at": now,
+        "calendly_click_type": click_type,
+    }
+
+    filters = []
+    if lead_id:
+        filters.append({"id": lead_id})
+        try:
+            filters.append({"_id": ObjectId(lead_id)})
+        except Exception:
+            pass
+    if email_clean:
+        filters.append({"email": email_clean})
+    if len(clean_digits) >= 10:
+        filters.append({"phone": {"$regex": f"{clean_digits}$"}})
+        filters.append({"contact_number": {"$regex": f"{clean_digits}$"}})
+        filters.append({"mobile_number": {"$regex": f"{clean_digits}$"}})
+
+    if not filters:
+        return
+
+    q = {"$or": filters}
+    try:
+        await app_state.upserted_leads.update_many(q, {"$set": update_doc})
+        await app_state.contacts.update_many(q, {"$set": update_doc})
+        await app_state.enquiries.update_many(q, {"$set": update_doc})
+        await app_state.whatsapp_conversations.update_many(q, {"$set": update_doc})
+        logger.info("Recorded Calendly click (%s) for lead filters: %s", click_type, filters)
+    except Exception as e:
+        logger.warning("Error recording Calendly click: %s", e)
+
+
+async def process_calendly_followups_and_cleanup(
+    app_state,
+    target_lead_id: str | None = None,
+    manual_stage: int | None = None,
+) -> dict:
+    """Evaluate Hot Leads, track Calendly bookings, send automated follow-up emails,
+    and automatically delete leads from Zoho CRM if still unbooked after 7 days.
+    
+    Automated Follow-up Schedule:
+    - Day 0/1: Initial consultation invitation after form submission or booking click.
+    - Day 3: Reminder check-in highlighting filling consultation & site visit slots.
+    - Day 7: Final notice warning priority reservation closes today.
+    - 7+ Days Unbooked: Automatically removed from Zoho CRM.
+    """
+    now = datetime.now(timezone.utc)
+    from zoho_crm import delete_zoho_lead
+
+    # Query target leads for automated follow-ups (Hot leads only)
+    query = {"$or": [
+        {"lead_rating": "Hot"},
+        {"lead_score": {"$gte": 80}},
+        {"calendly_booking": {"$ne": None}},
+        {"calendly_clicked": True},
+    ]}
+    if target_lead_id:
+        query = {"id": target_lead_id}
+
+    cursor = app_state.upserted_leads.find(query)
+    hot_leads = await cursor.to_list(1000)
+
+    stats = {"evaluated": len(hot_leads), "followups_sent": 0, "crm_deleted": 0, "booked": 0}
+
+    for lead in hot_leads:
+        lead_id = lead.get("id")
+        lead_email = (lead.get("email") or "").strip().lower()
+        lead_phone = lead.get("phone") or ""
+        digits = re.sub(r"\D", "", lead_phone)[-10:]
+        lead_name = (lead.get("full_name") or f"{lead.get('first_name', '')} {lead.get('last_name', '')}").strip() or "Valued Client"
+        pref_summary = lead.get("property_summary") or lead.get("requirement") or ""
+
+        # Only a lead that actually booked through the Calendly link or manually marked by admin is booked
+        is_booked = bool(lead.get("is_booked") or lead.get("booked_via_link") or lead.get("manually_marked_booked"))
+
+        if is_booked:
+            stats["booked"] += 1
+            continue  # Scheduled! Lead Booked: Skip all follow-up reminders and alerts - Reminders Closed
+
+        # Lead is NOT booked: check age considering admin-extended days
+        created_at = _parse_lead_dt(lead.get("created_at") or lead.get("updated_at")) or now
+        days_old = (now - created_at).total_seconds() / 86400.0
+        current_stage = int(lead.get("calendly_followup_stage") or 0)
+        extended_days = int(lead.get("followup_extended_days") or 0)
+        overdue_threshold = 7.0 + extended_days
+
+        stage_to_send = None
+        if manual_stage:
+            stage_to_send = manual_stage
+        elif days_old >= overdue_threshold:
+            if current_stage < 3:
+                stage_to_send = 3
+        elif days_old >= (3.0 + min(extended_days, 3)):
+            if current_stage < 2:
+                stage_to_send = 2
+        elif days_old >= 0:
+            if current_stage < 1 and (has_clicked or days_old >= 0.04):
+                stage_to_send = 1
+
+        if stage_to_send and lead_email:
+            base = PUBLIC_BASE_URL or "http://127.0.0.1:8000"
+            cal_tracked = f"{base}/schedule?id={quote_plus(lead_id)}&email={quote_plus(lead_email)}&phone={quote_plus(lead_phone)}"
+            visit_tracked = f"{base}/visit?id={quote_plus(lead_id)}&email={quote_plus(lead_email)}&phone={quote_plus(lead_phone)}"
+            ok = await run_in_threadpool(
+                send_calendly_followup_email,
+                lead_name,
+                lead_email,
+                stage_to_send,
+                pref_summary,
+                cal_tracked,
+                visit_tracked,
+            )
+            if ok:
+                stats["followups_sent"] += 1
+                current_stage = stage_to_send
+                await app_state.upserted_leads.update_one(
+                    {"id": lead_id},
+                    {"$set": {
+                        "calendly_followup_stage": stage_to_send,
+                        "calendly_last_followup_at": now,
+                    }}
+                )
+
+        # 7-DAY RULE (+ Extended Days): Instead of automatically deleting from Zoho CRM,
+        # send an urgent alert email to the salesperson to CALL the customer,
+        # and give the Administrator the manual right to delete the lead via the Actions field.
+        if days_old >= overdue_threshold and not lead.get("crm_deleted"):
+            if not lead.get("salesperson_day7_notified"):
+                alert_ok = await run_in_threadpool(send_salesperson_day7_hotlead_alert, lead)
+                if alert_ok:
+                    stats["salesperson_alerts_sent"] = stats.get("salesperson_alerts_sent", 0) + 1
+                    await app_state.upserted_leads.update_one(
+                        {"id": lead_id},
+                        {"$set": {
+                            "salesperson_day7_notified": True,
+                            "salesperson_day7_notified_at": now,
+                            "overdue_7days": True,
+                        }}
+                    )
+
+    return stats
+
+
+async def auto_calendly_followup_background_worker(app_state):
+    """Autonomous background worker that periodically evaluates Hot leads,
+    triggers scheduled Calendly follow-ups, and auto-deletes unbooked leads
+    from Zoho CRM after 7 days.
+    """
+    logger.info("Autonomous Calendly follow-up & CRM auto-cleanup background worker started.")
+    await asyncio.sleep(10)
+    while True:
+        try:
+            await process_calendly_followups_and_cleanup(app_state)
+            await asyncio.sleep(1800)
+        except asyncio.CancelledError:
+            logger.info("Autonomous Calendly follow-up worker cancelled.")
+            break
+        except Exception as e:
+            logger.debug("Calendly follow-up worker cycle notice: %s", e)
+            await asyncio.sleep(60)
+
+
+_cached_calendly_user_uri: str | None = None
+_last_calendly_api_sync_ts: float = 0.0
+
+
+def fetch_calendly_api_scheduled_events_sync() -> list[dict]:
+    """Directly fetch active scheduled events and invitees from Calendly API using CALENDLY_TOKEN.
+    Implements caching and rate-limit pacing to respect Calendly's 50 requests/min free tier.
+    """
+    global _cached_calendly_user_uri
+    if not CALENDLY_TOKEN:
+        return []
+
+    try:
+        headers = {"Authorization": f"Bearer {CALENDLY_TOKEN}", "User-Agent": "ProfilentApp/1.0"}
+        # 1. Get current user (cached in memory to save quota)
+        user_uri = _cached_calendly_user_uri
+        if not user_uri:
+            user_req = urllib.request.Request("https://api.calendly.com/users/me", headers=headers)
+            with urllib.request.urlopen(user_req, timeout=10) as resp:
+                user_data = json.loads(resp.read().decode())
+            user_uri = user_data.get("resource", {}).get("uri")
+            if user_uri:
+                _cached_calendly_user_uri = user_uri
+            else:
+                return []
+
+        # 2. Query active events from past 2 days to future, sorted asc by start_time, limit 50
+        min_start = (datetime.now(timezone.utc) - timedelta(days=2)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        events_url = (
+            f"https://api.calendly.com/scheduled_events?user={quote_plus(user_uri)}"
+            f"&status=active&min_start_time={quote_plus(min_start)}&sort=start_time:asc&count=50"
+        )
+        events_req = urllib.request.Request(events_url, headers=headers)
+        with urllib.request.urlopen(events_req, timeout=10) as resp:
+            events_data = json.loads(resp.read().decode())
+        events_list = events_data.get("collection", [])
+
+        results = []
+        for ev in events_list:
+            ev_uri = ev.get("uri")
+            if not ev_uri:
+                continue
+            time.sleep(0.12)  # Pace queries to prevent burst rate-limiting
+            inv_url = f"{ev_uri}/invitees?status=active"
+            inv_req = urllib.request.Request(inv_url, headers=headers)
+            try:
+                with urllib.request.urlopen(inv_req, timeout=8) as inv_resp:
+                    inv_data = json.loads(inv_resp.read().decode())
+                for inv in inv_data.get("collection", []):
+                    phone = normalize_e164(inv.get("text_reminder_number") or "")
+                    if not phone:
+                        for q in inv.get("questions_and_answers", []):
+                            ans = str(q.get("answer", ""))
+                            if re.search(r"phone|mobile|whatsapp|telephone", str(q.get("question", "")), re.I) or re.search(r"\+?\d[\d\s\-]{8,}", ans):
+                                phone = normalize_e164(ans)
+                                if phone:
+                                    break
+                    results.append({
+                        "event_uri": ev_uri,
+                        "event_name": ev.get("name") or "Property Consultation",
+                        "start_time": ev.get("start_time"),
+                        "end_time": ev.get("end_time"),
+                        "invitee_uri": inv.get("uri", ""),
+                        "invitee_name": inv.get("name", ""),
+                        "invitee_email": (inv.get("email") or "").strip().lower(),
+                        "invitee_phone": phone,
+                        "questions_and_answers": inv.get("questions_and_answers", []),
+                        "join_url": ev.get("location", {}).get("join_url") if isinstance(ev.get("location"), dict) else "",
+                        "reschedule_url": inv.get("reschedule_url", ""),
+                        "cancel_url": inv.get("cancel_url", ""),
+                        "timezone": inv.get("timezone", "Asia/Kolkata"),
+                    })
+            except urllib.error.HTTPError as he:
+                if he.code == 429:
+                    logger.warning("Calendly API rate limit reached (429). Using currently collected events.")
+                    break
+                logger.warning("Could not fetch invitees for %s: %s", ev_uri, he)
+            except Exception as e:
+                logger.warning("Could not fetch invitees for %s: %s", ev_uri, e)
+
+        return results
+    except urllib.error.HTTPError as he:
+        if he.code == 429:
+            logger.warning("Calendly API rate limit reached on event list (429).")
+        else:
+            logger.warning("Error in fetch_calendly_api_scheduled_events_sync: %s", he)
+        return []
+    except Exception as e:
+        logger.warning("Error in fetch_calendly_api_scheduled_events_sync: %s", e)
+        return []
+
+
+async def sync_calendly_api_bookings(app_state, force: bool = False) -> dict:
+    """Synchronize live bookings from Calendly API into MongoDB and upserted_leads.
+    Throttles non-forced calls to avoid exceeding the 50 req/min rate limit.
+    """
+    global _last_calendly_api_sync_ts
+    if not CALENDLY_TOKEN:
+        return {"synced_events": 0, "matched_leads": 0, "status": "skipped", "reason": "No CALENDLY_TOKEN"}
+
+    now_ts = time.time()
+    if not force and (now_ts - _last_calendly_api_sync_ts < 20.0):
+        return {"synced_events": 0, "matched_leads": 0, "status": "throttled", "reason": "Sync ran recently"}
+    _last_calendly_api_sync_ts = now_ts
+
+    events_data = await run_in_threadpool(fetch_calendly_api_scheduled_events_sync)
+    if not events_data:
+        return {"synced_events": 0, "matched_leads": 0, "status": "ok"}
+
+    now = datetime.now(timezone.utc)
+    synced_count = 0
+    booked_leads_count = 0
+
+    for item in events_data:
+        invitee_uri = item["invitee_uri"]
+        email = (item.get("invitee_email") or "").strip().lower()
+        phone = item.get("invitee_phone") or ""
+        digits = re.sub(r"\D", "", phone)[-10:] if phone else ""
+
+        # 1. Upsert into calendly_webhook_events
+        booking_doc = {
+            "invitee_uri": invitee_uri,
+            "event_uri": item["event_uri"],
+            "event_name": item["event_name"],
+            "invitee_name": item["invitee_name"],
+            "invitee_email": email,
+            "invitee_phone": phone,
+            "start_time": item["start_time"],
+            "end_time": item["end_time"],
+            "timezone": item["timezone"],
+            "join_url": item["join_url"],
+            "questions_and_answers": item["questions_and_answers"],
+            "reschedule_url": item["reschedule_url"],
+            "cancel_url": item["cancel_url"],
+            "status": "synced_from_api",
+            "received_at": now,
+        }
+
+        await app_state.calendly_webhook_events.update_one(
+            {"invitee_uri": invitee_uri},
+            {"$set": booking_doc},
+            upsert=True
+        )
+        synced_count += 1
+
+        # 2. Match with upserted_leads: strict matching by invitee_email
+        matched_leads = []
+        if email:
+            matched_leads = await app_state.upserted_leads.find(
+                {"email": {"$regex": f"^{re.escape(email)}$", "$options": "i"}}
+            ).to_list(10)
+
+        for m_lead in matched_leads:
+            lead_id = m_lead["id"]
+            is_already_notified = bool(m_lead.get("salesperson_booking_notified"))
+            update_fields = {
+                "calendly_booking": booking_doc,
+                "booked_via_link": True,
+                "calendly_clicked": True,
+                "is_booked": True,
+                "status": "Lead Booked",
+                "reminders_closed": True,
+                "overdue_7days": False,
+            }
+
+            if not is_already_notified:
+                sent = await run_in_threadpool(send_salesperson_meeting_booked_email, m_lead, booking_doc)
+                if sent:
+                    update_fields["salesperson_booking_notified"] = True
+                    update_fields["salesperson_booking_notified_at"] = now
+
+            await app_state.upserted_leads.update_one(
+                {"id": lead_id},
+                {"$set": update_fields}
+            )
+            booked_leads_count += 1
+
+    return {"synced_events": synced_count, "matched_leads": booked_leads_count, "status": "success"}
+
+
+@app.post("/api/admin/calendly/sync", dependencies=[Depends(require_admin)])
+async def admin_sync_calendly_api():
+    """Manual trigger to synchronize live bookings from Calendly API."""
+    res = await sync_calendly_api_bookings(app.state, force=True)
+    return res
+
+
+@app.get("/api/admin/calendly-leads", dependencies=[Depends(require_admin)])
+async def admin_list_calendly_leads(background_tasks: BackgroundTasks):
+    """Return all qualifying Hot leads for the Calendly Bookings section."""
+    now = datetime.now(timezone.utc)
+
+    # Automatically trigger non-blocking background sync from Calendly API (throttled to 20s)
+    background_tasks.add_task(sync_calendly_api_bookings, app.state)
+
+    cal_events = await app.state.calendly_webhook_events.find({}).sort("received_at", -1).limit(500).to_list()
+    cal_by_email = {}
+    for ev in cal_events:
+        em = (ev.get("invitee_email") or ev.get("email") or "").strip().lower()
+        st_raw = ev.get("start_time") or ev.get("event_start_time")
+        st_dt = _parse_lead_dt(st_raw) if st_raw else None
+        if st_dt and st_dt < (now - timedelta(days=2)):
+            continue
+        if em and em not in cal_by_email:
+            cal_by_email[em] = ev
+
+    query = {"$or": [
+        {"lead_rating": "Hot"},
+        {"lead_score": {"$gte": 80}},
+        {"calendly_booking": {"$ne": None}},
+        {"calendly_clicked": True},
+    ]}
+    leads = await app.state.upserted_leads.find(query).sort("created_at", -1).to_list(1000)
+
+    rows = []
+    for lead in leads:
+        lead_id = lead.get("id")
+        lead_email = (lead.get("email") or "").strip().lower()
+        lead_phone = lead.get("phone") or ""
+        digits = re.sub(r"\D", "", lead_phone)[-10:]
+        lead_name = (lead.get("full_name") or f"{lead.get('first_name', '')} {lead.get('last_name', '')}").strip() or "Valued Client"
+
+        # Check existing booking: must strictly match this lead's email
+        booking = lead.get("calendly_booking")
+        if booking and lead_email:
+            b_em = (booking.get("invitee_email") or booking.get("email") or "").strip().lower()
+            if b_em and b_em != lead_email:
+                booking = None
+
+        # If lead has no attached booking, check if cal_by_email has an active booking for this email
+        if not booking and lead_email and lead_email in cal_by_email:
+            booking = cal_by_email[lead_email]
+
+        # Lead is booked ONLY if they have a matching active Calendly booking or was manually marked booked
+        has_cal_booking = bool(
+            booking and (
+                not booking.get("invitee_email")
+                or (booking.get("invitee_email") or "").strip().lower() == lead_email
+            )
+        )
+        is_booked = bool(has_cal_booking or lead.get("manually_marked_booked"))
+
+        if is_booked and not booking and lead.get("calendly_booking"):
+            booking = lead.get("calendly_booking")
+
+        has_clicked = bool(lead.get("calendly_clicked_at") or lead.get("calendly_clicked"))
+        created_at = _parse_lead_dt(lead.get("created_at") or lead.get("updated_at")) or now
+        days_old = round((now - created_at).total_seconds() / 86400.0, 1)
+
+        extended_days = int(lead.get("followup_extended_days") or 0)
+        overdue_threshold = 7.0 + extended_days
+
+        appt_time = None
+        if booking and is_booked:
+            appt_time = booking.get("event_start_time") or booking.get("start_time") or booking.get("event_date")
+
+        stage = int(lead.get("calendly_followup_stage") or 0)
+        crm_deleted = bool(lead.get("crm_deleted"))
+        overdue_7days = bool(days_old >= overdue_threshold and not is_booked and not crm_deleted)
+
+        if is_booked:
+            status = "Lead Booked"
+            # Persist booked status and booking doc in database if not already persisted
+            if has_cal_booking and (not lead.get("is_booked") or not lead.get("calendly_booking")):
+                try:
+                    await app.state.upserted_leads.update_one(
+                        {"id": lead_id},
+                        {"$set": {
+                            "calendly_booking": booking,
+                            "booked_via_link": True,
+                            "calendly_clicked": True,
+                            "is_booked": True,
+                            "status": "Lead Booked",
+                            "reminders_closed": True,
+                            "overdue_7days": False,
+                        }}
+                    )
+                except Exception:
+                    pass
+
+            if not lead.get("salesperson_booking_notified") and booking:
+                try:
+                    await run_in_threadpool(send_salesperson_meeting_booked_email, lead, booking)
+                    await app.state.upserted_leads.update_one(
+                        {"id": lead_id},
+                        {"$set": {
+                            "salesperson_booking_notified": True,
+                            "salesperson_booking_notified_at": now,
+                        }}
+                    )
+                except Exception:
+                    pass
+        elif crm_deleted:
+            status = "CRM Deleted"
+        elif overdue_7days:
+            status = "7+ Days Overdue (Call Required)"
+        elif stage == 3:
+            status = "Day 7 Final Notice Sent"
+        elif stage == 2:
+            status = "Day 3 Reminder Sent"
+        elif stage == 1:
+            status = "Day 1 Follow-up Sent"
+        elif has_clicked:
+            status = "Clicked (Pending Booking)"
+        else:
+            status = "Pending Booking"
+
+        # Database self-healing: reset unverified bookings so only true booked leads show as booked
+        if not is_booked and (lead.get("is_booked") or lead.get("status") == "Lead Booked" or lead.get("calendly_booking")):
+            try:
+                reset_fields = {
+                    "is_booked": False,
+                    "status": status,
+                    "reminders_closed": False,
+                    "salesperson_booking_notified": False,
+                    "booked_via_link": False,
+                }
+                if not lead.get("calendly_clicked_at"):
+                    reset_fields["calendly_clicked"] = False
+
+                await app.state.upserted_leads.update_one(
+                    {"id": lead_id},
+                    {
+                        "$set": reset_fields,
+                        "$unset": {"calendly_booking": ""}
+                    }
+                )
+            except Exception:
+                pass
+
+        rows.append({
+            "id": lead_id,
+            "customer_name": lead_name,
+            "first_name": lead.get("first_name", ""),
+            "last_name": lead.get("last_name", ""),
+            "email": lead_email,
+            "phone": lead_phone,
+            "date_time": appt_time if is_booked else serialize_admin_value(created_at),
+            "appointment_time": appt_time,
+            "submission_time": serialize_admin_value(created_at),
+            "timeline": lead.get("planning_to_buy") or "Within 1 Month",
+            "budget": lead.get("budget_range") or "-",
+            "location": lead.get("location_preference") or "-",
+            "bhk": lead.get("bhk_preference") or "-",
+            "status": status,
+            "is_booked": is_booked,
+            "reminders_closed": bool(is_booked or lead.get("reminders_closed")),
+            "clicked": has_clicked,
+            "click_type": lead.get("calendly_click_type", "consultation"),
+            "followup_stage": stage,
+            "last_followup_at": serialize_admin_value(lead.get("calendly_last_followup_at")),
+            "crm_deleted": crm_deleted,
+            "crm_deleted_at": serialize_admin_value(lead.get("crm_deleted_at")),
+            "overdue_7days": overdue_7days,
+            "extended_days": extended_days,
+            "extended_at": serialize_admin_value(lead.get("followup_extended_at")),
+            "extended_note": lead.get("followup_extended_note") or "",
+            "salesperson_day7_notified": bool(lead.get("salesperson_day7_notified")),
+            "salesperson_day7_notified_at": serialize_admin_value(lead.get("salesperson_day7_notified_at")),
+            "salesperson_booking_notified": bool(lead.get("salesperson_booking_notified")),
+            "salesperson_booking_notified_at": serialize_admin_value(lead.get("salesperson_booking_notified_at")),
+            "lead_rating": "Hot",
+            "lead_score": int(lead.get("lead_score") or 85),
+            "zoho_sync_status": lead.get("zoho_sync_status", "pending"),
+            "zoho_lead_id": lead.get("zoho_lead_id"),
+            "booking_details": serialize_admin_value(booking) if is_booked else None,
+            "property_summary": lead.get("property_summary") or "",
+            "requirement": lead.get("requirement") or "",
+            "days_old": days_old,
+            "sources": lead.get("sources", []),
+        })
+
+    return serialize_admin_value(rows)
+
+
+class ExtendFollowupDaysPayload(BaseModel):
+    days: int = Field(default=7, ge=1, le=90, description="Additional days to extend follow-up schedule")
+    note: Optional[str] = Field(None, max_length=500, description="Optional note for extending follow-up schedule")
+
+
+@app.post("/api/admin/calendly/extend-days/{lead_id}", dependencies=[Depends(require_admin)])
+async def admin_extend_calendly_days(lead_id: str, payload: ExtendFollowupDaysPayload):
+    """Admin can extend or add days to a customer's follow-up cycle.
+    This gives the customer additional time before being flagged overdue.
+    """
+    lead = await app.state.upserted_leads.find_one({"id": lead_id})
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+
+    if lead.get("is_booked") or lead.get("calendly_booking"):
+        return {"status": "skipped", "message": "Lead is already booked. Reminders are closed."}
+
+    now = datetime.now(timezone.utc)
+    current_extended = int(lead.get("followup_extended_days") or 0)
+    new_extended = current_extended + payload.days
+
+    await app.state.upserted_leads.update_one(
+        {"id": lead_id},
+        {"$set": {
+            "followup_extended_days": new_extended,
+            "followup_extended_at": now,
+            "followup_extended_note": payload.note or f"Extended by +{payload.days} days by Administrator",
+            "overdue_7days": False,
+            "salesperson_day7_notified": False,
+        }}
+    )
+
+    lead_name = (lead.get("full_name") or f"{lead.get('first_name', '')} {lead.get('last_name', '')}").strip() or "Valued Client"
+    return {
+        "status": "success",
+        "lead_id": lead_id,
+        "customer_name": lead_name,
+        "added_days": payload.days,
+        "total_extended_days": new_extended,
+        "message": f"Follow-up window for {lead_name} extended by +{payload.days} days (Total: +{new_extended} days).",
+    }
+
+
+@app.post("/api/admin/calendly/mark-booked/{lead_id}", dependencies=[Depends(require_admin)])
+async def admin_mark_lead_booked(lead_id: str, background_tasks: BackgroundTasks):
+    """Admin manually marks a lead as 'Lead Booked' (e.g. booked via phone or direct Calendly link).
+    Sets status to 'Lead Booked', closes follow-up reminders, and dispatches the meeting booked notification email to the salesperson.
+    """
+    lead = await app.state.upserted_leads.find_one({"id": lead_id})
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+
+    now = datetime.now(timezone.utc)
+    booking_stub = {
+        "event_name": "Property Consultation (Direct / Calendly)",
+        "start_time": now.isoformat(),
+        "invitee_name": lead.get("full_name") or f"{lead.get('first_name', '')} {lead.get('last_name', '')}".strip() or "Valued Client",
+        "invitee_email": lead.get("email") or "",
+        "invitee_phone": lead.get("phone") or "",
+        "join_url": CALENDLY_URL,
+        "received_at": now,
+    }
+
+    await app.state.upserted_leads.update_one(
+        {"id": lead_id},
+        {"$set": {
+            "calendly_booking": booking_stub,
+            "is_booked": True,
+            "booked_via_link": True,
+            "manually_marked_booked": True,
+            "calendly_clicked": True,
+            "status": "Lead Booked",
+            "reminders_closed": True,
+            "salesperson_booking_notified": True,
+            "salesperson_booking_notified_at": now,
+            "overdue_7days": False,
+        }}
+    )
+
+    lead_name = (lead.get("full_name") or f"{lead.get('first_name', '')} {lead.get('last_name', '')}").strip() or "Valued Client"
+    background_tasks.add_task(send_salesperson_meeting_booked_email, lead, booking_stub)
+
+    return {
+        "status": "success",
+        "lead_id": lead_id,
+        "customer_name": lead_name,
+        "message": f"Lead '{lead_name}' marked as 'Lead Booked'. Reminders closed and meeting notification email sent to salesperson ({SALES_EMAIL or 'Sales Desk'}).",
+    }
+
+
+@app.post("/api/admin/calendly/send-followup/{lead_id}", dependencies=[Depends(require_admin)])
+async def admin_send_calendly_followup(lead_id: str, background_tasks: BackgroundTasks):
+    """Manually trigger a follow-up email to customer and notify salesperson to call if 7+ days unbooked."""
+    lead = await app.state.upserted_leads.find_one({"id": lead_id})
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    
+    if lead.get("calendly_booking") or lead.get("is_booked") or lead.get("reminders_closed"):
+        return {"status": "skipped", "message": "Lead is booked and reminders are closed."}
+    
+    lead_email = (lead.get("email") or "").strip().lower()
+    if not lead_email:
+        raise HTTPException(status_code=400, detail="Lead has no email address on file.")
+        
+    lead_name = (lead.get("full_name") or f"{lead.get('first_name', '')} {lead.get('last_name', '')}").strip() or "Valued Client"
+    curr_stage = int(lead.get("calendly_followup_stage") or 0)
+    next_stage = min(3, curr_stage + 1) if curr_stage < 3 else 3
+    
+    now = datetime.now(timezone.utc)
+    pref_summary = lead.get("property_summary") or lead.get("requirement") or ""
+    
+    base = PUBLIC_BASE_URL or "http://127.0.0.1:8000"
+    lead_phone = lead.get("phone") or ""
+    cal_tracked = f"{base}/schedule?id={quote_plus(lead_id)}&email={quote_plus(lead_email)}&phone={quote_plus(lead_phone)}"
+    visit_tracked = f"{base}/visit?id={quote_plus(lead_id)}&email={quote_plus(lead_email)}&phone={quote_plus(lead_phone)}"
+    success = await run_in_threadpool(
+        send_calendly_followup_email,
+        lead_name,
+        lead_email,
+        next_stage,
+        pref_summary,
+        cal_tracked,
+        visit_tracked,
+    )
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to send follow-up email. Check SMTP settings.")
+        
+    await app.state.upserted_leads.update_one(
+        {"id": lead_id},
+        {"$set": {"calendly_followup_stage": next_stage, "calendly_last_followup_at": now}}
+    )
+    
+    created_at = _parse_lead_dt(lead.get("created_at") or lead.get("updated_at")) or now
+    days_old = (now - created_at).total_seconds() / 86400.0
+    salesperson_alerted = False
+    if next_stage == 3 or days_old >= 7.0:
+        salesperson_alerted = await run_in_threadpool(send_salesperson_day7_hotlead_alert, lead)
+        await app.state.upserted_leads.update_one(
+            {"id": lead_id},
+            {"$set": {
+                "salesperson_day7_notified": True,
+                "salesperson_day7_notified_at": now,
+                "overdue_7days": True,
+            }}
+        )
+
+    stage_names = {1: "Day 1 (Initial)", 2: "Day 3 (Reminder)", 3: "Day 7 (Final Notice)"}
+    msg = f"Stage {next_stage} ({stage_names.get(next_stage, '')}) follow-up email sent to {lead_email}."
+    if next_stage == 3 or days_old >= 7.0:
+        msg += f" Urgent Day 7 Call alert dispatched to salesperson ({SALES_EMAIL or 'Sales Desk'})!"
+
+    return {
+        "status": "success",
+        "stage": next_stage,
+        "email": lead_email,
+        "salesperson_alerted": salesperson_alerted,
+        "message": msg,
+    }
+
+
+@app.delete("/api/admin/calendly-leads/{lead_id}", dependencies=[Depends(require_admin)])
+async def admin_delete_calendly_lead(lead_id: str, background_tasks: BackgroundTasks):
+    """Admin manual deletion of a Calendly / Hot Lead from Zoho CRM and MongoDB database."""
+    lead = await app.state.upserted_leads.find_one({"id": lead_id})
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+
+    lead_email = (lead.get("email") or "").strip().lower()
+    lead_phone = lead.get("phone") or ""
+    zoho_lead_id = lead.get("zoho_lead_id")
+
+    # 1. Delete from Zoho CRM directly
+    from zoho_crm import delete_zoho_lead
+    zoho_deleted = await run_in_threadpool(
+        delete_zoho_lead,
+        lead_id=zoho_lead_id,
+        email=lead_email,
+        phone=lead_phone,
+        lead_doc=lead,
+    )
+
+    # 2. Delete from MongoDB upserted_leads
+    await app.state.upserted_leads.delete_one({"id": lead_id})
+
+    # 3. Clean up only the specific underlying records linked to this lead
+    digits = re.sub(r"\D", "", lead_phone)[-10:] if lead_phone else ""
+    record_items = lead.get("records") or []
+    c_ids = [oid(r["id"]) for r in record_items if r.get("entity") == "contact" and r.get("id")]
+    e_ids = [oid(r["id"]) for r in record_items if r.get("entity") in ("enquiry", "property") and r.get("id")]
+    w_ids = [oid(r["id"]) for r in record_items if r.get("entity") in ("conversation", "conversations") and r.get("id")]
+
+    if c_ids:
+        await app.state.contacts.delete_many({"_id": {"$in": c_ids}})
+    if e_ids:
+        await app.state.enquiries.delete_many({"_id": {"$in": e_ids}})
+    if w_ids:
+        await app.state.whatsapp_conversations.delete_many({"_id": {"$in": w_ids}})
+    elif lead_email and digits:
+        # Match strictly by BOTH email and phone, never phone alone
+        exact_q = {
+            "$and": [
+                {"email": lead_email},
+                {"$or": [
+                    {"phone": {"$regex": f"{digits}$"}},
+                    {"contact_number": {"$regex": f"{digits}$"}},
+                    {"mobile_number": {"$regex": f"{digits}$"}}
+                ]}
+            ]
+        }
+        await app.state.contacts.delete_many(exact_q)
+        await app.state.enquiries.delete_many(exact_q)
+        await app.state.whatsapp_conversations.delete_many(exact_q)
+
+    if lead_email:
+        await app.state.calendly_webhook_events.delete_many({"invitee_email": lead_email})
+
+    background_tasks.add_task(sync_and_save_upserted_leads, app.state)
+    return {
+        "status": "success",
+        "message": "Lead permanently deleted from Zoho CRM and local database by Administrator.",
+        "zoho_deleted": zoho_deleted,
+    }
+
+
+@app.post("/api/admin/calendly/run-followups", dependencies=[Depends(require_admin)])
+async def admin_run_calendly_followups(background_tasks: BackgroundTasks):
+    """Trigger an immediate sweep of Calendly follow-ups and 7-day Zoho CRM auto-deletion."""
+    summary = await process_calendly_followups_and_cleanup(app.state)
+    background_tasks.add_task(sync_and_save_upserted_leads, app.state)
+    return {"status": "success", "summary": summary}
+
+
+class TrackClickPayload(BaseModel):
+    id: str | None = None
+    email: str | None = None
+    phone: str | None = None
+    click_type: str = "consultation"
+
+
+@app.post("/api/calendly/track-click")
+async def track_calendly_click(payload: TrackClickPayload, request: Request, background_tasks: BackgroundTasks):
+    background_tasks.add_task(
+        _record_calendly_click,
+        request.app.state,
+        payload.id,
+        payload.email,
+        payload.phone,
+        payload.click_type or "consultation",
+    )
+    return {"status": "ok"}
 
 
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
@@ -2514,8 +3914,22 @@ async def start_whatsapp_chat(request: Request, prefill: bool = True):
 
 
 @app.get("/schedule", include_in_schema=False)
-async def schedule_page():
+async def schedule_page(request: Request, background_tasks: BackgroundTasks, id: str = "", email: str = "", phone: str = ""):
+    target_id = id or request.query_params.get("id", "")
+    target_email = email or request.query_params.get("email", "")
+    target_phone = phone or request.query_params.get("phone", "")
+    background_tasks.add_task(_record_calendly_click, request.app.state, target_id, target_email, target_phone, "consultation")
     return RedirectResponse(CALENDLY_URL, status_code=307)
+
+
+@app.get("/visit", include_in_schema=False)
+async def visit_page(request: Request, background_tasks: BackgroundTasks, id: str = "", email: str = "", phone: str = ""):
+    target_id = id or request.query_params.get("id", "")
+    target_email = email or request.query_params.get("email", "")
+    target_phone = phone or request.query_params.get("phone", "")
+    target_url = CALENDLY_VISIT_URL or CALENDLY_URL
+    background_tasks.add_task(_record_calendly_click, request.app.state, target_id, target_email, target_phone, "visit")
+    return RedirectResponse(target_url, status_code=307)
 
 
 @app.get("/booking/redirect", include_in_schema=False)
@@ -4007,11 +5421,14 @@ async def process_calendly_invitee(payload: dict, state, background_tasks: Backg
     lead = await state.enquiries.find_one({"$or": lead_or}, sort=[("created_at", -1)]) if lead_or else None
     if not contact and not lead and match_or:
         contact = await state.contacts.find_one({"$or": match_or})
-    matched = contact or lead
+    upsert_lead = None
+    if email:
+        upsert_lead = await state.upserted_leads.find_one({"email": {"$regex": f"^{re.escape(email)}$", "$options": "i"}})
+    matched = contact or lead or upsert_lead
     if not matched:
         await events.update_one({"invitee_uri": invitee_uri}, {"$set": {"status": "unmatched"}, "$unset": {"lease_until": ""}})
         logger.warning(
-            "Calendly booking %s was not matched to a contact or enquiry (email present: %s, phone present: %s)",
+            "Calendly booking %s was not matched to a contact, enquiry, or hot lead (email present: %s, phone present: %s)",
             invitee_uri,
             bool(email),
             bool(booking_phone),
@@ -4084,18 +5501,64 @@ async def process_calendly_invitee(payload: dict, state, background_tasks: Backg
         "received_at": now,
         "notification": {"status": notification_status, "twilio_message_sid": None, "updated_at": now},
     }
-    collection = state.contacts if contact else state.enquiries
-    await collection.update_one({"_id": matched["_id"]}, {"$set": {"calendly_booking": booking}})
+    if contact:
+        await state.contacts.update_one({"_id": contact["_id"]}, {"$set": {"calendly_booking": booking}})
+    elif lead:
+        await state.enquiries.update_one({"_id": lead["_id"]}, {"$set": {"calendly_booking": booking}})
     await events.update_one(
         {"invitee_uri": invitee_uri},
         {"$set": {"status": notification_status}, "$unset": {"lease_until": ""}},
     )
+
+    # Update unified upserted_leads strictly for the matching lead
+    target_upsert_lead = None
+    if email:
+        target_upsert_lead = await state.upserted_leads.find_one({"email": {"$regex": f"^{re.escape(email)}$", "$options": "i"}})
+    clean_lead_digits = re.sub(r"\D", "", booking_phone)[-10:] if booking_phone else ""
+    if not target_upsert_lead and len(clean_lead_digits) >= 10:
+        cand_upsert = await state.upserted_leads.find({"phone": {"$regex": f"{clean_lead_digits}$"}}).to_list(5)
+        if len(cand_upsert) == 1 and not cand_upsert[0].get("email"):
+            target_upsert_lead = cand_upsert[0]
+
+    if target_upsert_lead:
+        try:
+            await state.upserted_leads.update_one(
+                {"id": target_upsert_lead["id"]},
+                {"$set": {
+                    "calendly_booking": booking,
+                    "calendly_clicked": True,
+                    "booked_via_link": True,
+                    "booked_at": now,
+                    "is_booked": True,
+                    "status": "Lead Booked",
+                    "reminders_closed": True,
+                    "salesperson_booking_notified": True,
+                    "salesperson_booking_notified_at": now,
+                    "overdue_7days": False,
+                }}
+            )
+        except Exception as e:
+            logger.warning("Could not update upserted_leads on Calendly booking: %s", e)
+
     # Preserve property enquiry preferences (location, budget, BHK, timeline)
     prop_data = {}
     if lead:
         prop_data.update(lead)
     if contact and contact.get("whatsapp_answers"):
         prop_data.update(contact["whatsapp_answers"])
+
+    # Dispatch Meeting Booked notification email to salesperson
+    client_info_for_sales = {
+        **prop_data,
+        **matched,
+        "full_name": payload.get("name") or matched.get("full_name") or " ".join(
+            part for part in (matched.get("first_name", ""), matched.get("last_name", "")) if part
+        ),
+        "email": email or matched.get("email", ""),
+        "phone": booking_phone or matched.get("mobile_number") or matched.get("contact_number", ""),
+        "appointment_time": scheduled_event.get("start_time"),
+    }
+    background_tasks.add_task(send_salesperson_meeting_booked_email, client_info_for_sales, booking)
 
     background_tasks.add_task(
         sync_zoho_lead,

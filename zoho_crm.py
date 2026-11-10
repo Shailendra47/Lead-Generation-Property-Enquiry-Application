@@ -1284,3 +1284,124 @@ def sync_all_hot_upserted_leads(sync_already_synced: bool = False) -> dict:
         "skipped_invalid": skipped_invalid,
         "failed": failed,
     }
+
+
+def delete_zoho_lead(
+    lead_id: str | None = None,
+    email: str | None = None,
+    phone: str | None = None,
+    module_name: str | None = None,
+    lead_doc: dict | None = None,
+) -> bool:
+    """Delete a lead record from Zoho CRM by record ID or by email/phone search.
+    
+    Triggered when a hot lead customer has not booked an appointment via Calendly
+    within 7 days of form submission.
+    
+    Returns True if successfully deleted from Zoho CRM or already absent.
+    """
+    if not zoho_is_configured():
+        logger.warning("Zoho CRM credentials not configured; skipping lead deletion.")
+        return False
+
+    config = _get_config()
+    target_module = (module_name or config["module"]).strip() or "Leads"
+
+    target_id = str(lead_id or "").strip()
+    clean_email = str(email or "").strip().lower()
+    clean_ph = _clean_phone(phone)
+
+    # 1. If lead_id not provided, try to find the record in Zoho by email or phone
+    if not target_id and (clean_email or clean_ph):
+        try:
+            token = _get_access_token()
+            search_param = f"email={clean_email}" if clean_email else f"phone={clean_ph}"
+            search_resp = _session.get(
+                f"{_api_domain}/crm/v8/{target_module}/search?{search_param}",
+                headers={"Authorization": f"Zoho-oauthtoken {token}"},
+                timeout=12,
+            )
+            if search_resp.status_code == 200:
+                s_data = search_resp.json().get("data", [])
+                if s_data and s_data[0].get("id"):
+                    target_id = str(s_data[0]["id"])
+            elif search_resp.status_code == 204:
+                # Record not found in Zoho CRM - already considered deleted
+                logger.info("Lead not found in Zoho CRM search (%s); marking as deleted.", search_param)
+                if lead_doc:
+                    _update_mongo_lead_status(
+                        lead_doc,
+                        "deleted_unbooked",
+                        reason="Unbooked after 7 days - deleted from Zoho CRM",
+                        clear_zoho_id=True,
+                    )
+                return True
+        except Exception as e:
+            logger.warning("Zoho search error before deletion: %s", e)
+
+    if not target_id:
+        logger.warning("Cannot delete from Zoho CRM: no lead_id, email, or phone provided.")
+        if lead_doc:
+            _update_mongo_lead_status(
+                lead_doc,
+                "deleted_unbooked",
+                reason="Unbooked after 7 days - removed from CRM tracking",
+                clear_zoho_id=True,
+            )
+        return True
+
+    # 2. Call Zoho CRM Delete Record API
+    for attempt in range(2):
+        try:
+            token = _get_access_token(force_refresh=(attempt > 0))
+            del_resp = _session.delete(
+                f"{_api_domain}/crm/v8/{target_module}/{target_id}",
+                headers={"Authorization": f"Zoho-oauthtoken {token}"},
+                timeout=15,
+            )
+
+            if del_resp.status_code in (200, 204):
+                logger.info("Successfully deleted lead %s from Zoho CRM %s.", target_id, target_module)
+                if lead_doc:
+                    _update_mongo_lead_status(
+                        lead_doc,
+                        "deleted_unbooked",
+                        reason="Unbooked after 7 days - deleted from Zoho CRM",
+                        clear_zoho_id=True,
+                    )
+                return True
+
+            if del_resp.status_code == 404:
+                logger.info("Lead %s was already absent in Zoho CRM (HTTP 404).", target_id)
+                if lead_doc:
+                    _update_mongo_lead_status(
+                        lead_doc,
+                        "deleted_unbooked",
+                        reason="Unbooked after 7 days - already deleted from Zoho CRM",
+                        clear_zoho_id=True,
+                    )
+                return True
+
+            if del_resp.status_code == 401 and attempt == 0:
+                logger.warning("Zoho 401 Unauthorized on delete; refreshing token and retrying...")
+                _invalidate_token()
+                continue
+
+            logger.error("Zoho CRM delete failed (HTTP %s): %s", del_resp.status_code, del_resp.text[:300])
+            break
+        except Exception as e:
+            logger.error("Exception during Zoho CRM delete: %s", e)
+            break
+
+    # If API call failed, mark status in MongoDB anyway so admin reflects deletion attempt
+    if lead_doc:
+        _update_mongo_lead_status(
+            lead_doc,
+            "deleted_unbooked",
+            reason="Unbooked after 7 days - deletion recorded",
+            clear_zoho_id=True,
+        )
+    return False
+
+
+
