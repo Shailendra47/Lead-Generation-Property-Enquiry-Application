@@ -2744,6 +2744,7 @@ async def process_calendly_followups_and_cleanup(
             continue  # Scheduled! Lead Booked: Skip all follow-up reminders and alerts - Reminders Closed
 
         # Lead is NOT booked: check age considering admin-extended days
+        has_clicked = bool(lead.get("calendly_clicked_at") or lead.get("calendly_clicked"))
         created_at = _parse_lead_dt(lead.get("created_at") or lead.get("updated_at")) or now
         days_old = (now - created_at).total_seconds() / 86400.0
         current_stage = int(lead.get("calendly_followup_stage") or 0)
@@ -2808,22 +2809,25 @@ async def process_calendly_followups_and_cleanup(
 
 
 async def auto_calendly_followup_background_worker(app_state):
-    """Autonomous background worker that periodically evaluates Hot leads,
-    triggers scheduled Calendly follow-ups, and auto-deletes unbooked leads
-    from Zoho CRM after 7 days.
+    """Autonomous background worker that continuously syncs live Calendly bookings,
+    evaluates Hot leads, triggers scheduled Day 1/3/7 follow-ups, and alerts sales reps.
+    Runs 100% automatically in the background.
     """
-    logger.info("Autonomous Calendly follow-up & CRM auto-cleanup background worker started.")
-    await asyncio.sleep(10)
+    logger.info("Autonomous Calendly sync & follow-up background worker started.")
+    await asyncio.sleep(5)
     while True:
         try:
+            # 1. Automatically fetch and match any live Calendly bookings
+            await sync_calendly_api_bookings(app_state)
+            # 2. Process automated Day 1/3/7 follow-ups
             await process_calendly_followups_and_cleanup(app_state)
-            await asyncio.sleep(1800)
+            await asyncio.sleep(60)
         except asyncio.CancelledError:
             logger.info("Autonomous Calendly follow-up worker cancelled.")
             break
         except Exception as e:
             logger.debug("Calendly follow-up worker cycle notice: %s", e)
-            await asyncio.sleep(60)
+            await asyncio.sleep(30)
 
 
 _cached_calendly_user_uri: str | None = None
@@ -5501,6 +5505,7 @@ async def process_calendly_invitee(payload: dict, state, background_tasks: Backg
         "received_at": now,
         "notification": {"status": notification_status, "twilio_message_sid": None, "updated_at": now},
     }
+    collection = state.contacts if contact else (state.enquiries if lead else state.upserted_leads)
     if contact:
         await state.contacts.update_one({"_id": contact["_id"]}, {"$set": {"calendly_booking": booking}})
     elif lead:
@@ -5690,11 +5695,12 @@ async def process_calendly_invitee(payload: dict, state, background_tasks: Backg
         "sandbox_time": sandbox_time,
     }
     if notification_status == "queued":
+        matched_id = matched.get("_id") or matched.get("id")
         background_tasks.add_task(
             send_calendly_confirmation,
             events,
             collection,
-            matched["_id"],
+            matched_id,
             invitee_uri,
             recipient_phone,
             template_variables,
@@ -5742,8 +5748,9 @@ async def send_calendly_confirmation(events, leads, lead_id, invitee_uri, recipi
         bool(message_sid),
     )
     now = datetime.now(timezone.utc)
+    lead_query = {"_id": lead_id} if isinstance(lead_id, ObjectId) else {"$or": [{"_id": lead_id}, {"id": str(lead_id)}]}
     await leads.update_one(
-        {"_id": lead_id},
+        lead_query,
         {"$set": {
             "calendly_booking.notification.status": status,
             "calendly_booking.notification.twilio_message_sid": message_sid,
