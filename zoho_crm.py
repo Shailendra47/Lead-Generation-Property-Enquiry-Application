@@ -702,6 +702,18 @@ def sync_zoho_lead(
             or ""
         ).strip()
 
+        # Dynamically map Lead_Source to "WhatsApp" or "Property Form" based on entry origin
+        explicit_source = lead.get("Lead_Source") or lead.get("lead_source")
+        raw_source = str(lead.get("source") or "").lower()
+        sources_list = [str(s).lower() for s in lead.get("sources", [])]
+        has_wa = (
+            explicit_source == "WhatsApp"
+            or "whatsapp" in raw_source
+            or any("whatsapp" in s for s in sources_list)
+            or bool(wa_answers or lead.get("whatsapp_answers") or lead.get("whatsapp_conversation_id"))
+            or any(r.get("entity") == "conversation" for r in lead.get("records", []) if isinstance(r, dict))
+        )
+
         description_sections = [
             "🔥 [QUALIFIED HOT LEAD - HIGH INTENT PROPERTY BUYER]",
             f"Intent Rating       : {quality['rating'].upper()} (Score: {quality['score']}/100)",
@@ -721,26 +733,11 @@ def sync_zoho_lead(
             f"Special Requirements: {requirements or 'None'}",
             "===============================",
             f"Lead Source         : {lead.get('source', 'Website property enquiry')}",
-            f"WhatsApp Opt-in     : {'Yes' if (lead.get('whatsapp_opt_in') or wa_answers.get('whatsapp_opt_in')) else 'No'}",
         ])
-        if lead.get("local_id"):
-            description_sections.append(f"Local MongoDB ID    : {lead['local_id']}")
         if lead.get("calendly_event_name"):
             description_sections.append(f"Calendly Meeting    : {lead['calendly_event_name']} ({lead.get('calendly_start_time', '')})")
         if lead.get("calendly_join_url"):
             description_sections.append(f"Meeting URL         : {lead['calendly_join_url']}")
-
-        # Dynamically map Lead_Source to "WhatsApp" or "Property Form" based on entry origin
-        explicit_source = lead.get("Lead_Source") or lead.get("lead_source")
-        raw_source = str(lead.get("source") or "").lower()
-        sources_list = [str(s).lower() for s in lead.get("sources", [])]
-        has_wa = (
-            explicit_source == "WhatsApp"
-            or "whatsapp" in raw_source
-            or any("whatsapp" in s for s in sources_list)
-            or bool(wa_answers or lead.get("whatsapp_answers") or lead.get("whatsapp_conversation_id"))
-            or any(r.get("entity") == "conversation" for r in lead.get("records", []) if isinstance(r, dict))
-        )
 
         if explicit_source in ("WhatsApp", "Property Form"):
             mapped_source = explicit_source

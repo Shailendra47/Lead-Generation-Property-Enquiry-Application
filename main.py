@@ -388,7 +388,7 @@ class ContactForm(BaseModel):
     email: EmailStr
     contact_number: str = Field(validation_alias=AliasChoices("contact_number", "mobile_number", "phone", "PhoneNumber"))
     requirement: str = Field(default="", max_length=1000)
-    whatsapp_opt_in: bool = Field(default=True)
+    whatsapp_opt_in: bool = Field(default=False)
 
     @field_validator("email", mode="before")
     @classmethod
@@ -441,7 +441,13 @@ class ContactForm(BaseModel):
         return v
 
 
-def send_confirmation_email(name: str, to_email: str, property_address: str) -> None:
+def send_confirmation_email(
+    name: str,
+    to_email: str,
+    property_address: str,
+    lead_id: str = "",
+    phone: str = "",
+) -> None:
     """Send the buyer-inquiry reply. Runs in the background; failures are logged, not raised."""
     if not (SMTP_USER and SMTP_PASSWORD):
         logger.warning("SMTP_USER / SMTP_PASSWORD not set - confirmation email skipped.")
@@ -459,7 +465,30 @@ def send_confirmation_email(name: str, to_email: str, property_address: str) -> 
         "convenience.</p>",
     ]
 
-    booking_url = schedule_page_url()
+    base_url = (PUBLIC_BASE_URL or "").rstrip("/")
+    if base_url:
+        params = [f"email={quote_plus(to_email)}"]
+        if name:
+            params.append(f"name={quote_plus(name)}")
+        if phone:
+            params.append(f"phone={quote_plus(phone)}")
+        if lead_id:
+            params.append(f"id={quote_plus(str(lead_id))}")
+        params.append("source=contact_email")
+        booking_url = f"{base_url}/schedule?{'&'.join(params)}"
+    else:
+        cal_base = schedule_page_url()
+        if cal_base:
+            cal_params = [f"email={quote_plus(to_email)}"]
+            if name:
+                cal_params.append(f"name={quote_plus(name)}")
+            if phone:
+                cal_params.append(f"phone={quote_plus(phone)}")
+            sep = "&" if "?" in cal_base else "?"
+            booking_url = f"{cal_base}{sep}{'&'.join(cal_params)}"
+        else:
+            booking_url = ""
+
     if booking_url:
         text_parts.append(f"Book a meeting at a time that suits you:\n{booking_url}")
         html_parts.append(
@@ -857,9 +886,9 @@ def send_salesperson_meeting_booked_email(lead: dict, booking: dict = None) -> b
     if raw_time:
         try:
             instant = datetime.fromisoformat(str(raw_time).replace("Z", "+00:00"))
-            tz_str = str(b.get("timezone") or "Asia/Kolkata")
             try:
-                display_time_str = instant.astimezone(ZoneInfo(tz_str)).strftime("%a %d %b %Y, %I:%M %p %Z")
+                ist_instant = instant.astimezone(ZoneInfo("Asia/Kolkata"))
+                display_time_str = ist_instant.strftime("%a %d %b %Y, %I:%M %p IST")
             except Exception:
                 display_time_str = instant.strftime("%a %d %b %Y, %I:%M %p UTC")
         except Exception:
@@ -1057,7 +1086,7 @@ async def process_contact_submission(
             },
         )),
         ("customer email", run_in_threadpool(
-            send_confirmation_email, full_name, email, "our properties",
+            send_confirmation_email, full_name, email, "our properties", contact_id, phone,
         )),
     ])
     results = await asyncio.gather(*(job for _, job in jobs), return_exceptions=True)
@@ -1119,11 +1148,11 @@ async def create_contact(form: ContactForm, background_tasks: BackgroundTasks):
     background_tasks.add_task(sync_and_save_upserted_leads, app.state)
 
     whatsapp_sender_clean = re.sub(r"\D", "", os.getenv("TWILIO_WHATSAPP_FROM", "14155238886")) or "14155238886"
-    whatsapp_url = f"https://wa.me/{whatsapp_sender_clean}?text=Hi"
-    whatsapp_app_url = f"whatsapp://send?phone={whatsapp_sender_clean}&text=Hi"
+    whatsapp_url = f"https://wa.me/{whatsapp_sender_clean}?text=Hi" if form.whatsapp_opt_in else None
+    whatsapp_app_url = f"whatsapp://send?phone={whatsapp_sender_clean}&text=Hi" if form.whatsapp_opt_in else None
 
     return {
-        "message": "Your enquiry was saved.",
+        "message": "Your enquiry was saved." if form.whatsapp_opt_in else "Your enquiry was saved successfully.",
         "email_status": "queued",
         "whatsapp_started": bool(form.whatsapp_opt_in),
         "whatsapp_status": "queued" if form.whatsapp_opt_in else "not_requested",
@@ -1197,7 +1226,7 @@ class EnquiryForm(BaseModel):
         validation_alias=AliasChoices("remarks_requirements", "remarks", "requirement"),
     )
     requirement: str = Field(default="", max_length=1000)
-    whatsapp_opt_in: bool = Field(default=True)
+    whatsapp_opt_in: bool = Field(default=False)
 
     @model_validator(mode="before")
     @classmethod
@@ -1414,7 +1443,7 @@ async def process_property_enquiry_submission(
 
     # 5. Customer email & Salesperson notification with AI Lead Rating
     await run_in_threadpool(
-        send_confirmation_email, full_name, email, f"properties in {location_pref}"
+        send_confirmation_email, full_name, email, f"properties in {location_pref}", str(local_id), whatsapp_phone,
     )
     await run_in_threadpool(
         send_salesperson_notification,
@@ -1490,38 +1519,39 @@ async def create_enquiry(form: EnquiryForm, background_tasks: BackgroundTasks):
     }
     now_utc = datetime.now(timezone.utc)
     enquiry_id = str(result.inserted_id)
-    try:
-        # Check if an existing uncompleted conversation belongs to this exact customer
-        active_c = await app.state.whatsapp_conversations.find_one({
-            "phone": whatsapp_phone,
-            "email": str(form.email).strip().lower(),
-            "status": {"$in": ["in_progress", "awaiting_location", "awaiting_customer_start"]},
-        })
-        conv_payload = {
-            "phone": whatsapp_phone,
-            "property_lead_id": enquiry_id,
-            "first_name": form.first_name,
-            "last_name": form.last_name,
-            "full_name": full_name,
-            "email": str(form.email).strip().lower(),
-            "answers": enquiry_answers,
-            "form_requirement": req,
-            "source": "Property Form",
-            "status": "awaiting_customer_start",
-            "stage": "complete",
-            "updated_at": now_utc,
-        }
-        if active_c:
-            await app.state.whatsapp_conversations.update_one(
-                {"_id": active_c["_id"]},
-                {"$set": conv_payload},
-            )
-        else:
-            conv_payload["created_at"] = now_utc
-            conv_payload["messages"] = []
-            await app.state.whatsapp_conversations.insert_one(conv_payload)
-    except Exception as exc:
-        logger.warning("Could not pre-populate whatsapp_conversations for %s: %s", whatsapp_phone, exc)
+    if form.whatsapp_opt_in:
+        try:
+            # Check if an existing uncompleted conversation belongs to this exact customer
+            active_c = await app.state.whatsapp_conversations.find_one({
+                "phone": whatsapp_phone,
+                "email": str(form.email).strip().lower(),
+                "status": {"$in": ["in_progress", "awaiting_location", "awaiting_customer_start"]},
+            })
+            conv_payload = {
+                "phone": whatsapp_phone,
+                "property_lead_id": enquiry_id,
+                "first_name": form.first_name,
+                "last_name": form.last_name,
+                "full_name": full_name,
+                "email": str(form.email).strip().lower(),
+                "answers": enquiry_answers,
+                "form_requirement": req,
+                "source": "Property Form",
+                "status": "awaiting_customer_start",
+                "stage": "complete",
+                "updated_at": now_utc,
+            }
+            if active_c:
+                await app.state.whatsapp_conversations.update_one(
+                    {"_id": active_c["_id"]},
+                    {"$set": conv_payload},
+                )
+            else:
+                conv_payload["created_at"] = now_utc
+                conv_payload["messages"] = []
+                await app.state.whatsapp_conversations.insert_one(conv_payload)
+        except Exception as exc:
+            logger.warning("Could not pre-populate whatsapp_conversations for %s: %s", whatsapp_phone, exc)
 
     background_tasks.add_task(
         process_property_enquiry_submission,
@@ -1537,10 +1567,14 @@ async def create_enquiry(form: EnquiryForm, background_tasks: BackgroundTasks):
         background_tasks,
     )
     whatsapp_sender_clean = re.sub(r"\D", "", os.getenv("TWILIO_WHATSAPP_FROM", "14155238886")) or "14155238886"
-    whatsapp_url = f"https://wa.me/{whatsapp_sender_clean}?text=Hi"
-    whatsapp_app_url = f"whatsapp://send?phone={whatsapp_sender_clean}&text=Hi"
+    whatsapp_url = f"https://wa.me/{whatsapp_sender_clean}?text=Hi" if form.whatsapp_opt_in else None
+    whatsapp_app_url = f"whatsapp://send?phone={whatsapp_sender_clean}&text=Hi" if form.whatsapp_opt_in else None
     return {
-        "message": "Thank you! Your enquiry has been submitted. A WhatsApp confirmation has been sent to your phone.",
+        "message": (
+            "Thank you! Your enquiry has been submitted. A WhatsApp confirmation has been sent to your phone."
+            if form.whatsapp_opt_in
+            else "Thank you! Your enquiry has been submitted successfully."
+        ),
         "whatsapp_url": whatsapp_url,
         "whatsapp_app_url": whatsapp_app_url,
         "id": str(result.inserted_id),
@@ -1566,7 +1600,8 @@ async def login_shortcut():
 
 
 @app.get("/admin/login", include_in_schema=False)
-async def admin_login_page():
+async def admin_login_page(request: Request):
+    request.session.clear()
     return FileResponse(BASE_DIR / "admin" / "login.html")
 
 
@@ -1582,7 +1617,7 @@ async def admin_login(data: AdminLogin, request: Request):
     return {"message": "ok"}
 
 
-@app.post("/admin/logout")
+@app.api_route("/admin/logout", methods=["GET", "POST"])
 async def admin_logout(request: Request):
     request.session.clear()
     return {"message": "ok"}
@@ -1833,11 +1868,11 @@ def build_upserted_leads(
         items.append({"entity": "enquiry", "doc": e})
     for conv in (conversations or []):
         ans = conv.get("answers") or {}
-        # Only include if conversation actually had real activity or completed questionnaire
-        has_messages = len(conv.get("messages") or []) > 0
+        c_msgs = conv.get("messages") or []
+        has_user_reply = any(m.get("role") == "user" for m in c_msgs)
         is_complete = conv.get("status") == "complete"
-        has_pref = bool(conv.get("location_preference") or ans.get("location_preference") or ans.get("budget_range") or ans.get("planning_to_buy"))
-        if is_complete or has_messages or has_pref:
+        # Only include conversation if the customer actually chatted on WhatsApp or completed questionnaire
+        if is_complete or (has_user_reply and len(c_msgs) >= 2):
             items.append({"entity": "conversation", "doc": conv})
 
     # Sort chronological ascending so newer submissions enrich/update older ones
@@ -1868,8 +1903,21 @@ def build_upserted_leads(
             cand_group = groups.get(phone_to_group[phone_key])
             if cand_group:
                 cand_email = (cand_group.get("email") or "").strip().lower()
-                if not cand_email or not email_key or cand_email == email_key:
+                # Strict check: never merge if emails conflict!
+                if email_key and cand_email:
+                    if cand_email == email_key:
+                        group_id = phone_to_group[phone_key]
+                elif not email_key and not cand_email:
                     group_id = phone_to_group[phone_key]
+                elif entity == "conversation":
+                    # If this is a conversation, only merge into cand_group if cand_group does NOT have an opt-out contact
+                    is_optout = any(
+                        r.get("entity") == "contact" and r.get("doc", {}).get("whatsapp_opt_in") is False
+                        for r in cand_group.get("records", [])
+                    )
+                    conv_ans_email = (d.get("answers", {}).get("email") or "").strip().lower()
+                    if not is_optout and (not cand_email or cand_email == conv_ans_email):
+                        group_id = phone_to_group[phone_key]
 
         # Merge groups if phone and email point to different existing groups without conflicting emails
         if phone_key and email_key and phone_key in phone_to_group and email_key in email_to_group:
@@ -1878,7 +1926,7 @@ def build_upserted_leads(
             if g_phone != g_email and g_phone in groups and g_email in groups:
                 t_email = (groups[g_phone].get("email") or "").strip().lower()
                 s_email = (groups[g_email].get("email") or "").strip().lower()
-                if not t_email or not s_email or t_email == s_email:
+                if (not t_email and not s_email) or (t_email and s_email and t_email == s_email):
                     target = groups[g_phone]
                     source = groups.pop(g_email)
                     target["records"].extend(source["records"])
@@ -2033,18 +2081,23 @@ def build_upserted_leads(
             if formatted_req not in g["requirements"] and req not in g["requirements"]:
                 g["requirements"].append(formatted_req)
 
-        rating_priority = {"Hot": 3, "Warm": 2, "Cold": 1}
+        rating_priority = {"Hot": 4, "Warm": 3, "Yet to be qualified": 2, "Cold": 1}
         doc_rating = d.get("lead_rating") or ans.get("lead_rating") or d.get("ai_rating") or ans.get("ai_rating") or "Cold"
         curr_ptb = str(g.get("planning_to_buy") or d.get("planning_to_buy") or ans.get("planning_to_buy") or "").lower()
         curr_br = str(g.get("budget_range") or d.get("budget_range") or ans.get("budget_range") or "").lower()
         curr_po = str(g.get("payment_option") or d.get("payment_option") or ans.get("payment_option") or "").lower()
 
+        has_booking = bool(d.get("calendly_booking")) or bool(g.get("calendly_booking"))
+        has_full_pref = bool(
+            (g.get("budget_range") or d.get("budget_range") or ans.get("budget_range"))
+            and (g.get("bhk_preference") or d.get("bhk_preference") or ans.get("bhk_preference"))
+        )
+
         if (
             doc_rating == "Hot"
             or d.get("ai_rating") == "Hot"
             or ans.get("ai_rating") == "Hot"
-            or bool(d.get("calendly_booking"))
-            or bool(g.get("calendly_booking"))
+            or (has_booking and has_full_pref)
             or any(w in curr_ptb for w in ["immediately", "within 1 month", "1 month"])
             or any(w in curr_br for w in ["1 crore", "crore", "above 2 crore", "80 lakh to 1 crore", "80 lakh", "80"])
             or "full" in curr_po
@@ -2052,8 +2105,10 @@ def build_upserted_leads(
             doc_rating = "Hot"
         elif doc_rating == "Warm" or any(w in curr_ptb for w in ["3 month", "6 month"]):
             doc_rating = "Warm"
+        elif has_booking and not has_full_pref:
+            doc_rating = "Yet to be qualified"
 
-        if rating_priority.get(doc_rating, 1) > rating_priority.get(g["lead_rating"], 1):
+        if rating_priority.get(doc_rating, 1) > rating_priority.get(g["lead_rating"], 0):
             g["lead_rating"] = doc_rating
 
         if d.get("ai_analysis") or ans.get("ai_analysis"):
@@ -2540,6 +2595,13 @@ async def admin_delete_conversation(conv_id: str, background_tasks: BackgroundTa
 
 @app.get("/api/admin/upsert-leads", dependencies=[Depends(require_admin)])
 async def admin_list_upsert_leads(background_tasks: BackgroundTasks):
+    cached_leads = await app.state.upserted_leads.find({}).sort("latest_activity", -1).to_list(1000)
+    if cached_leads:
+        background_tasks.add_task(sync_and_save_upserted_leads, app.state)
+        for l in cached_leads:
+            if "_id" in l:
+                l["_id"] = str(l["_id"])
+        return cached_leads
     return await sync_and_save_upserted_leads(app.state, background_tasks)
 
 
@@ -2687,10 +2749,13 @@ async def _record_calendly_click(
 
     q = {"$or": filters}
     try:
-        await app_state.upserted_leads.update_many(q, {"$set": update_doc})
-        await app_state.contacts.update_many(q, {"$set": update_doc})
-        await app_state.enquiries.update_many(q, {"$set": update_doc})
-        await app_state.whatsapp_conversations.update_many(q, {"$set": update_doc})
+        await asyncio.gather(
+            app_state.upserted_leads.update_many(q, {"$set": update_doc}),
+            app_state.contacts.update_many(q, {"$set": update_doc}),
+            app_state.enquiries.update_many(q, {"$set": update_doc}),
+            app_state.whatsapp_conversations.update_many(q, {"$set": update_doc}),
+            return_exceptions=True
+        )
         logger.info("Recorded Calendly click (%s) for lead filters: %s", click_type, filters)
     except Exception as e:
         logger.warning("Error recording Calendly click: %s", e)
@@ -2984,6 +3049,14 @@ async def sync_calendly_api_bookings(app_state, force: bool = False) -> dict:
 
         for m_lead in matched_leads:
             lead_id = m_lead["id"]
+            # Strict: Lead is booked ONLY if customer actually opened/clicked our Calendly link
+            has_clicked_link = bool(
+                m_lead.get("calendly_clicked_at")
+                or m_lead.get("calendly_clicked")
+            )
+            if not has_clicked_link:
+                continue
+
             is_already_notified = bool(m_lead.get("salesperson_booking_notified"))
             update_fields = {
                 "calendly_booking": booking_doc,
@@ -3005,6 +3078,18 @@ async def sync_calendly_api_bookings(app_state, force: bool = False) -> dict:
                 {"id": lead_id},
                 {"$set": update_fields}
             )
+            try:
+                await app_state.contacts.update_many(
+                    {"email": {"$regex": f"^{re.escape(email)}$", "$options": "i"}},
+                    {"$set": {
+                        "calendly_booking": booking_doc,
+                        "calendly_clicked": True,
+                        "is_booked": True,
+                        "status": "Lead Booked",
+                    }}
+                )
+            except Exception:
+                pass
             booked_leads_count += 1
 
     return {"synced_events": synced_count, "matched_leads": booked_leads_count, "status": "success"}
@@ -3036,13 +3121,28 @@ async def admin_list_calendly_leads(background_tasks: BackgroundTasks):
         if em and em not in cal_by_email:
             cal_by_email[em] = ev
 
-    query = {"$or": [
+    cal_emails = [e for e in cal_by_email.keys() if e]
+    or_clauses = [
         {"lead_rating": "Hot"},
         {"lead_score": {"$gte": 80}},
         {"calendly_booking": {"$ne": None}},
         {"calendly_clicked": True},
-    ]}
+    ]
+    if cal_emails:
+        or_clauses.append({"email": {"$in": cal_emails}})
+    query = {"$or": or_clauses}
     leads = await app.state.upserted_leads.find(query).sort("created_at", -1).to_list(1000)
+
+    conv_docs = await app.state.whatsapp_conversations.find({}).to_list(1000)
+    conv_by_email = {}
+    conv_by_id = {}
+    for c in conv_docs:
+        c_id = str(c.get("id") or c.get("_id") or "")
+        if c_id:
+            conv_by_id[c_id] = c
+        c_em = (c.get("email") or c.get("answers", {}).get("email") or "").strip().lower()
+        if c_em and c_em not in conv_by_email:
+            conv_by_email[c_em] = c
 
     rows = []
     for lead in leads:
@@ -3052,6 +3152,67 @@ async def admin_list_calendly_leads(background_tasks: BackgroundTasks):
         digits = re.sub(r"\D", "", lead_phone)[-10:]
         lead_name = (lead.get("full_name") or f"{lead.get('first_name', '')} {lead.get('last_name', '')}").strip() or "Valued Client"
 
+        # Qualification & Rating:
+        # Leads from Contact Us without preferences (budget/bhk) who book Calendly are "Yet to be qualified"
+        sources = lead.get("sources", [])
+        is_contact_form = (
+            "Contact Us" in sources
+            or any("contact" in str(s).lower() for s in sources)
+            or lead.get("source") == "Website contact form"
+        )
+        has_full_pref = bool(
+            lead.get("budget_range") and str(lead.get("budget_range")).strip() not in {"", "-", "None", "null"}
+            and lead.get("bhk_preference") and str(lead.get("bhk_preference")).strip() not in {"", "-", "None", "null"}
+        )
+        is_yet_qualified = (
+            lead.get("lead_rating") == "Yet to be qualified"
+            or (is_contact_form and not has_full_pref)
+            or (not has_full_pref and lead.get("lead_rating") not in ["Hot", "Warm"])
+        )
+
+        # Match WhatsApp conversation:
+        # If customer did not redirect to WhatsApp and complete the chat, or is "Yet to be qualified":
+        # DO NOT add chats inside the chat section (strictly genuine customer WhatsApp chats only).
+        conv_id = None
+        conv_msgs = []
+        conv_msg_count = 0
+        conv_status = None
+
+        if not is_yet_qualified:
+            conv_match = None
+            for rec in lead.get("records", []):
+                if rec.get("entity") == "conversation" and rec.get("id"):
+                    rec_id = str(rec.get("id"))
+                    if rec_id in conv_by_id:
+                        conv_match = conv_by_id[rec_id]
+                        break
+            if not conv_match and lead_email and lead_email in conv_by_email:
+                cand = conv_by_email[lead_email]
+                if any(m.get("role") == "user" for m in cand.get("messages", []) or []):
+                    conv_match = cand
+
+            if conv_match:
+                c_msgs = conv_match.get("messages", []) or []
+                has_user_reply = any(m.get("role") == "user" for m in c_msgs)
+                if has_user_reply or conv_match.get("status") == "complete":
+                    conv_id = str(conv_match.get("id") or conv_match.get("_id"))
+                    conv_msgs = c_msgs
+                    conv_msg_count = len(conv_msgs)
+                    conv_status = conv_match.get("status")
+
+        # Latest activity / submission timestamp for this lead
+        latest_sub_dt = _parse_lead_dt(lead.get("latest_activity") or lead.get("created_at") or lead.get("updated_at")) or now
+        clicked_at = _parse_lead_dt(lead.get("calendly_clicked_at"))
+
+        # Customer opened the link ONLY if clicked_at is recorded and corresponds to this submission
+        has_clicked = False
+        if clicked_at:
+            # Valid if clicked within 5 minutes before or any time after the submission
+            has_clicked = bool(clicked_at >= (latest_sub_dt - timedelta(minutes=5)))
+        elif lead.get("calendly_clicked"):
+            created_dt = _parse_lead_dt(lead.get("created_at")) or now
+            has_clicked = bool((now - created_dt).total_seconds() < 86400 * 30)
+
         # Check existing booking: must strictly match this lead's email
         booking = lead.get("calendly_booking")
         if booking and lead_email:
@@ -3059,13 +3220,17 @@ async def admin_list_calendly_leads(background_tasks: BackgroundTasks):
             if b_em and b_em != lead_email:
                 booking = None
 
-        # If lead has no attached booking, check if cal_by_email has an active booking for this email
-        if not booking and lead_email and lead_email in cal_by_email:
-            booking = cal_by_email[lead_email]
+        # Verify booking is not a stale session predating this latest submission
+        if booking:
+            booking_dt = _parse_lead_dt(booking.get("received_at") or booking.get("created_at"))
+            if booking_dt and booking_dt < (latest_sub_dt - timedelta(minutes=5)):
+                booking = None
 
-        # Lead is booked ONLY if they have a matching active Calendly booking or was manually marked booked
+        # Option B (Strict): Lead is booked ONLY if customer clicked our Calendly link AND filled the meeting
         has_cal_booking = bool(
-            booking and (
+            has_clicked
+            and booking
+            and (
                 not booking.get("invitee_email")
                 or (booking.get("invitee_email") or "").strip().lower() == lead_email
             )
@@ -3074,8 +3239,6 @@ async def admin_list_calendly_leads(background_tasks: BackgroundTasks):
 
         if is_booked and not booking and lead.get("calendly_booking"):
             booking = lead.get("calendly_booking")
-
-        has_clicked = bool(lead.get("calendly_clicked_at") or lead.get("calendly_clicked"))
         created_at = _parse_lead_dt(lead.get("created_at") or lead.get("updated_at")) or now
         days_old = round((now - created_at).total_seconds() / 86400.0, 1)
 
@@ -3107,12 +3270,22 @@ async def admin_list_calendly_leads(background_tasks: BackgroundTasks):
                             "overdue_7days": False,
                         }}
                     )
+                    if lead_email:
+                        await app.state.contacts.update_many(
+                            {"email": {"$regex": f"^{re.escape(lead_email)}$", "$options": "i"}},
+                            {"$set": {
+                                "calendly_booking": booking,
+                                "calendly_clicked": True,
+                                "is_booked": True,
+                                "status": "Lead Booked",
+                            }}
+                        )
                 except Exception:
                     pass
 
             if not lead.get("salesperson_booking_notified") and booking:
                 try:
-                    await run_in_threadpool(send_salesperson_meeting_booked_email, lead, booking)
+                    background_tasks.add_task(send_salesperson_meeting_booked_email, lead, booking)
                     await app.state.upserted_leads.update_one(
                         {"id": lead_id},
                         {"$set": {
@@ -3147,8 +3320,9 @@ async def admin_list_calendly_leads(background_tasks: BackgroundTasks):
                     "salesperson_booking_notified": False,
                     "booked_via_link": False,
                 }
-                if not lead.get("calendly_clicked_at"):
+                if not has_clicked:
                     reset_fields["calendly_clicked"] = False
+                    reset_fields["calendly_clicked_at"] = None
 
                 await app.state.upserted_leads.update_one(
                     {"id": lead_id},
@@ -3159,6 +3333,15 @@ async def admin_list_calendly_leads(background_tasks: BackgroundTasks):
                 )
             except Exception:
                 pass
+
+        if is_yet_qualified:
+            rating_label = "Yet to be qualified"
+            score_val = None
+            zoho_status_val = lead.get("zoho_sync_status") or "pending_call"
+        else:
+            rating_label = lead.get("lead_rating") or "Hot"
+            score_val = int(lead.get("lead_score") or 85)
+            zoho_status_val = lead.get("zoho_sync_status", "pending")
 
         rows.append({
             "id": lead_id,
@@ -3191,15 +3374,20 @@ async def admin_list_calendly_leads(background_tasks: BackgroundTasks):
             "salesperson_day7_notified_at": serialize_admin_value(lead.get("salesperson_day7_notified_at")),
             "salesperson_booking_notified": bool(lead.get("salesperson_booking_notified")),
             "salesperson_booking_notified_at": serialize_admin_value(lead.get("salesperson_booking_notified_at")),
-            "lead_rating": "Hot",
-            "lead_score": int(lead.get("lead_score") or 85),
-            "zoho_sync_status": lead.get("zoho_sync_status", "pending"),
+            "lead_rating": rating_label,
+            "lead_score": score_val,
+            "is_yet_to_be_qualified": is_yet_qualified,
+            "zoho_sync_status": zoho_status_val,
             "zoho_lead_id": lead.get("zoho_lead_id"),
             "booking_details": serialize_admin_value(booking) if is_booked else None,
             "property_summary": lead.get("property_summary") or "",
             "requirement": lead.get("requirement") or "",
             "days_old": days_old,
             "sources": lead.get("sources", []),
+            "whatsapp_conversation_id": conv_id,
+            "whatsapp_messages_count": conv_msg_count,
+            "whatsapp_conversation_status": conv_status,
+            "records": lead.get("records", []),
         })
 
     return serialize_admin_value(rows)
@@ -3918,12 +4106,24 @@ async def start_whatsapp_chat(request: Request, prefill: bool = True):
 
 
 @app.get("/schedule", include_in_schema=False)
-async def schedule_page(request: Request, background_tasks: BackgroundTasks, id: str = "", email: str = "", phone: str = ""):
+async def schedule_page(request: Request, background_tasks: BackgroundTasks, id: str = "", email: str = "", phone: str = "", name: str = ""):
     target_id = id or request.query_params.get("id", "")
     target_email = email or request.query_params.get("email", "")
     target_phone = phone or request.query_params.get("phone", "")
+    target_name = name or request.query_params.get("name", "")
     background_tasks.add_task(_record_calendly_click, request.app.state, target_id, target_email, target_phone, "consultation")
-    return RedirectResponse(CALENDLY_URL, status_code=307)
+    cal_url = CALENDLY_URL
+    params = []
+    if target_name:
+        params.append(f"name={quote_plus(target_name)}")
+    if target_email:
+        params.append(f"email={quote_plus(target_email)}")
+    if target_phone:
+        params.append(f"phone={quote_plus(target_phone)}")
+    if params:
+        sep = "&" if "?" in cal_url else "?"
+        cal_url = f"{cal_url}{sep}{'&'.join(params)}"
+    return RedirectResponse(cal_url, status_code=307)
 
 
 @app.get("/visit", include_in_schema=False)
@@ -3933,6 +4133,14 @@ async def visit_page(request: Request, background_tasks: BackgroundTasks, id: st
     target_phone = phone or request.query_params.get("phone", "")
     target_url = CALENDLY_VISIT_URL or CALENDLY_URL
     background_tasks.add_task(_record_calendly_click, request.app.state, target_id, target_email, target_phone, "visit")
+    params = []
+    if target_email:
+        params.append(f"email={quote_plus(target_email)}")
+    if target_phone:
+        params.append(f"phone={quote_plus(target_phone)}")
+    if params:
+        sep = "&" if "?" in target_url else "?"
+        target_url = f"{target_url}{sep}{'&'.join(params)}"
     return RedirectResponse(target_url, status_code=307)
 
 
@@ -4103,6 +4311,9 @@ async def complete_and_qualify_whatsapp_lead(
         "contact_id": conversation.get("contact_id"),
         "source": "WhatsApp property questionnaire",
         "Lead_Source": "WhatsApp",
+        "whatsapp_opt_in": True,
+        "whatsapp_opt_in_source": "whatsapp_chat",
+        "whatsapp_opt_in_at": now,
         "created_at": conversation.get("created_at", now),
         "completed_at": now,
     }
@@ -5526,6 +5737,16 @@ async def process_calendly_invitee(payload: dict, state, background_tasks: Backg
             target_upsert_lead = cand_upsert[0]
 
     if target_upsert_lead:
+        # Option B: Mark booked if lead clicked tracked link OR booked using their verified email
+        has_clicked_tracked_link = bool(
+            target_upsert_lead.get("calendly_clicked_at")
+            or target_upsert_lead.get("calendly_clicked")
+            or (target_upsert_lead.get("email") and target_upsert_lead.get("email").strip().lower() == email)
+        )
+        if not has_clicked_tracked_link:
+            logger.info("Calendly webhook booking for %s skipped because lead did not click tracking link (Option B).", email)
+            return {"received": True, "matched": True, "ignored_reason": "link_not_clicked"}
+
         try:
             await state.upserted_leads.update_one(
                 {"id": target_upsert_lead["id"]},
