@@ -34,6 +34,7 @@ from pymongo import AsyncMongoClient, ReturnDocument, UpdateOne
 from pymongo.errors import DuplicateKeyError, PyMongoError
 from starlette.concurrency import run_in_threadpool
 from starlette.middleware.sessions import SessionMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from twilio.request_validator import RequestValidator
 from location_service import is_verified_place, photon_locations, verified_locations
 
@@ -83,7 +84,7 @@ CALENDLY_VISIT_URL = os.getenv("CALENDLY_VISIT_URL", "https://calendly.com/rudra
 CALENDLY_WEBHOOK_SIGNING_KEY = os.getenv("CALENDLY_WEBHOOK_SIGNING_KEY", "")
 CALENDLY_TOKEN = os.getenv("CALENDLY_TOKEN", "")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite").strip() or "gemini-3.5-flash-lite"
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite").strip() or "gemini-3.1-flash-lite"
 
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD")
@@ -159,21 +160,44 @@ def extract_property_preferences(text: str, answers: dict) -> dict:
 
 
 def requirements_summary(answers: dict) -> str:
-    labels = (
+    labels = [
         ("Preferred area", "location_preference"),
         ("Budget", "budget_range"),
         ("Configuration", "bhk_preference"),
         ("Buying timeline", "planning_to_buy"),
         ("Payment preference", "payment_option"),
         ("Special requirements", "remarks_requirements"),
-    )
+    ]
+    seen_keys = {k for _, k in labels} | {
+        "full_name", "first_name", "last_name", "phone", "email",
+        "mobile_number", "contact_number", "customer_email", "language",
+        "form_requirement", "location_city", "location_area", "location_city_title",
+        "dynamic_locality_options", "summary", "spoke_to_person", "requirement",
+        "requirement_summary",
+    }
+    try:
+        from question_manager import get_active_questions_sync
+        for q in get_active_questions_sync():
+            sk = q.get("slot_key")
+            if sk and sk not in seen_keys:
+                title = q.get("title") or sk.replace("_", " ").title()
+                labels.append((title, sk))
+                seen_keys.add(sk)
+    except Exception:
+        pass
+
+    for k, v in answers.items():
+        if k not in seen_keys and v and not k.startswith("_"):
+            labels.append((k.replace("_", " ").title(), k))
+            seen_keys.add(k)
+
     return "; ".join(f"{label}: {answers[key]}" for label, key in labels if answers.get(key))
 
 
 def ai_extract_property_preferences(text: str, answers: dict) -> dict:
     """Use Google Gemini when configured; only property text is sent and contact data is masked."""
     gemini_key = os.getenv("GEMINI_API_KEY", "").strip() or GEMINI_API_KEY
-    gemini_model = os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite").strip() or GEMINI_MODEL
+    gemini_model = os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite").strip() or GEMINI_MODEL
     if not gemini_key:
         return {}
     safe_text = re.sub(r"\b[^\s@]+@[^\s@]+\.[^\s@]+\b", "[email hidden]", text)
@@ -205,7 +229,7 @@ def ai_extract_property_preferences(text: str, answers: dict) -> dict:
         method="POST",
     )
     try:
-        with urllib.request.urlopen(request, timeout=12) as response:
+        with urllib.request.urlopen(request, timeout=4.5) as response:
             body = json.loads(response.read().decode("utf-8"))
         raw_text = (
             body.get("candidates", [])[0]
@@ -236,7 +260,7 @@ def ai_location_suggestions(
         return []
 
     gemini_key = os.getenv("GEMINI_API_KEY", "").strip() or GEMINI_API_KEY
-    gemini_model = os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite").strip() or GEMINI_MODEL
+    gemini_model = os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite").strip() or GEMINI_MODEL
     if not gemini_key:
         return [str(label).strip() for label in (verified_labels or []) if str(label).strip()][:4]
 
@@ -268,7 +292,7 @@ def ai_location_suggestions(
         method="POST",
     )
     try:
-        with urllib.request.urlopen(request, timeout=10) as response:
+        with urllib.request.urlopen(request, timeout=4.5) as response:
             body = json.loads(response.read().decode("utf-8"))
         raw_text = (
             body.get("candidates", [])[0]
@@ -314,11 +338,12 @@ async def auto_calendly_followup_background_worker(app_state: Any) -> None:
 async def lifespan(app: FastAPI):
     if not MONGODB_URI:
         raise RuntimeError("MONGODB_URI is missing. Add it to your .env file.")
-    client = AsyncMongoClient(MONGODB_URI, tz_aware=True)
+    client = AsyncMongoClient(MONGODB_URI, tz_aware=True, maxPoolSize=50, minPoolSize=5)
     app.state.client = client
     app.state.contacts = client[DB_NAME][COLLECTION_NAME]
     app.state.enquiries = client[DB_NAME][ENQUIRY_COLLECTION_NAME]
     app.state.whatsapp_conversations = client[DB_NAME]["whatsapp_conversations"]
+    app.state.whatsapp_questions = client[DB_NAME]["whatsapp_questions"]
     app.state.calendly_webhook_events = client[DB_NAME]["calendly_webhook_events"]
     app.state.upserted_leads = client[DB_NAME][UPSERT_COLLECTION_NAME]
     await asyncio.gather(
@@ -335,6 +360,9 @@ async def lifespan(app: FastAPI):
         app.state.enquiries.create_index("budget_range"),
         app.state.enquiries.create_index("bhk_preference"),
         app.state.whatsapp_conversations.create_index("phone"),
+        app.state.whatsapp_conversations.create_index([("updated_at", -1)]),
+        app.state.whatsapp_questions.create_index("slot_key", unique=True),
+        app.state.whatsapp_questions.create_index([("order", 1)]),
         app.state.calendly_webhook_events.create_index("invitee_uri", unique=True),
         app.state.contacts.create_index("zoho_sync_status"),
         app.state.enquiries.create_index("zoho_sync_status"),
@@ -348,6 +376,8 @@ async def lifespan(app: FastAPI):
         app.state.upserted_leads.create_index("lead_rating"),
         app.state.upserted_leads.create_index("zoho_sync_status"),
         app.state.upserted_leads.create_index("zoho_lead_id"),
+        app.state.upserted_leads.create_index([("latest_activity", -1)]),
+        app.state.calendly_webhook_events.create_index([("event_start_time", -1)]),
     )
     # Start standing autonomous background workers
     sync_worker = asyncio.create_task(auto_zoho_sync_background_worker(app.state))
@@ -363,6 +393,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Property Contact Form", lifespan=lifespan)
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 app.add_middleware(
     SessionMiddleware,
     secret_key=SESSION_SECRET,
@@ -1031,18 +1062,7 @@ Action Directive: Customer has booked their consultation via Calendly. All autom
 
 
 
-async def process_contact_submission(
-    conversations,
-    contacts,
-    phone: str,
-    contact_id: str,
-    full_name: str,
-    email: str,
-    lead: dict,
-    background_tasks: BackgroundTasks,
-) -> None:
-    """Run independent post-save notifications, AI lead analysis, and CRM sync concurrently."""
-    # 1. Run Google Gemini AI Lead Analysis on contact submission
+async def _async_analyze_and_update_contact(contacts, contact_id: str, lead: dict):
     from conversation_ai import analyze_lead_with_ai
     try:
         ai_eval = await run_in_threadpool(analyze_lead_with_ai, lead)
@@ -1063,19 +1083,36 @@ async def process_contact_submission(
         lead["ai_analysis"] = summary_ai
         lead["ai_triggers"] = triggers_ai
         lead["lead_score"] = score
+        return ai_eval
     except Exception as exc:
         logger.warning("Could not run AI analysis on contact %s: %s", contact_id, exc)
+        return None
 
+
+async def process_contact_submission(
+    conversations,
+    contacts,
+    phone: str,
+    contact_id: str,
+    full_name: str,
+    email: str,
+    lead: dict,
+    background_tasks: BackgroundTasks,
+) -> None:
+    """Run independent post-save notifications, AI lead analysis, and CRM sync concurrently."""
     jobs = []
+    # 1. Start WhatsApp immediately (does not block on external AI analysis)
     if lead.get("whatsapp_opt_in"):
         jobs.append(("WhatsApp start", start_questionnaire(
             conversations, phone, contact_id, background_tasks,
             full_name=full_name, email=email, requirement=lead.get("requirement", ""),
         )))
+    # 2. Concurrently run AI analysis, salesperson email, and customer email
     jobs.extend([
+        ("AI analysis", _async_analyze_and_update_contact(contacts, contact_id, lead)),
         ("salesperson email", run_in_threadpool(
             send_salesperson_notification,
-            "New property enquiry",
+            f"New Contact Us Enquiry - {full_name}",
             {
                 "Name": full_name,
                 "Email": email,
@@ -1093,7 +1130,7 @@ async def process_contact_submission(
     for (label, _), result in zip(jobs, results):
         if isinstance(result, BaseException):
             logger.error("Post-submit %s failed: %r", label, result)
-        elif label == "WhatsApp start" and not result.get("started") and not result.get("sandbox"):
+        elif label == "WhatsApp start" and isinstance(result, dict) and not result.get("started") and not result.get("sandbox"):
             logger.warning("WhatsApp start did not send (status=%s)", result.get("status"))
 
 
@@ -1115,12 +1152,13 @@ async def create_contact(form: ContactForm, background_tasks: BackgroundTasks):
             detail="Enter the WhatsApp number in international format, e.g. +919876543210.",
         )
 
+    now_utc = datetime.now(timezone.utc)
     doc["contact_number"] = whatsapp_phone
-    doc["created_at"] = datetime.now(timezone.utc)
+    doc["created_at"] = now_utc
     if form.whatsapp_opt_in:
         doc["whatsapp_opt_in"] = True
         doc["whatsapp_opt_in_source"] = "contact_form_checkbox"
-        doc["whatsapp_opt_in_at"] = datetime.now(timezone.utc)
+        doc["whatsapp_opt_in_at"] = now_utc
     else:
         doc["whatsapp_opt_in"] = False
 
@@ -1134,6 +1172,79 @@ async def create_contact(form: ContactForm, background_tasks: BackgroundTasks):
 
     contact_id = str(result.inserted_id)
     lead = {**doc, "source": "Website contact form", "local_id": contact_id}
+
+    # Pre-populate whatsapp_conversations immediately for zero-latency WhatsApp transition
+    if form.whatsapp_opt_in:
+        try:
+            req_text = form.requirement.strip()
+            init_answers = {
+                "first_name": form.first_name,
+                "last_name": form.last_name,
+                "full_name": form.full_name,
+                "email": str(form.email).strip().lower(),
+                "mobile_number": whatsapp_phone,
+                "phone": whatsapp_phone,
+                "form_requirement": req_text,
+                "remarks_requirements": req_text,
+            }
+            if req_text:
+                from conversation_ai import extract_all_slots_from_text
+                extracted_init = extract_all_slots_from_text(req_text, init_answers)
+                for k, v in extracted_init.items():
+                    if v and not init_answers.get(k):
+                        init_answers[k] = v
+
+            active_c = await app.state.whatsapp_conversations.find_one({
+                "phone": whatsapp_phone,
+                "status": {"$in": ["in_progress", "awaiting_location", "awaiting_customer_start"]},
+            })
+            conv_payload = {
+                "phone": whatsapp_phone,
+                "contact_id": contact_id,
+                "first_name": form.first_name,
+                "last_name": form.last_name,
+                "full_name": form.full_name,
+                "email": str(form.email).strip().lower(),
+                "answers": init_answers,
+                "form_requirement": req_text,
+                "requirement_messages": [req_text] if req_text else [],
+                "source": "Website contact form",
+                "status": "awaiting_customer_start",
+                "stage": "q_ai_flow" if is_ai_configured() else "q5_location",
+                "updated_at": now_utc,
+            }
+            if active_c:
+                await app.state.whatsapp_conversations.update_one(
+                    {"_id": active_c["_id"]},
+                    {"$set": conv_payload},
+                )
+            else:
+                conv_payload["created_at"] = now_utc
+                conv_payload["messages"] = []
+                await app.state.whatsapp_conversations.insert_one(conv_payload)
+        except Exception as exc:
+            logger.warning("Could not pre-populate whatsapp_conversations for %s: %s", whatsapp_phone, exc)
+
+    # Immediately notify salesperson of new Contact Us submission upon form submit
+    try:
+        sales_fields_initial = {
+            "Form": "Contact Us (Website form submitted)",
+            "Name": form.full_name,
+            "Email": str(form.email),
+            "Contact number": whatsapp_phone,
+            "Initial requirement": form.requirement.strip() or "None",
+            "WhatsApp Opt-in": "Yes (Connecting on WhatsApp)" if form.whatsapp_opt_in else "No",
+            "Status": "Form Submitted — Client redirected to WhatsApp",
+            "Contact record ID": contact_id,
+        }
+        background_tasks.add_task(
+            send_salesperson_notification,
+            f"New Contact Us Enquiry - {form.full_name}",
+            sales_fields_initial,
+        )
+    except Exception as exc:
+        logger.warning("Could not dispatch immediate salesperson contact email: %s", exc)
+
     background_tasks.add_task(
         process_contact_submission,
         app.state.whatsapp_conversations,
@@ -1145,7 +1256,6 @@ async def create_contact(form: ContactForm, background_tasks: BackgroundTasks):
         lead,
         background_tasks,
     )
-    background_tasks.add_task(sync_and_save_upserted_leads, app.state)
 
     whatsapp_sender_clean = re.sub(r"\D", "", os.getenv("TWILIO_WHATSAPP_FROM", "14155238886")) or "14155238886"
     whatsapp_url = f"https://wa.me/{whatsapp_sender_clean}?text=Hi" if form.whatsapp_opt_in else None
@@ -1553,6 +1663,30 @@ async def create_enquiry(form: EnquiryForm, background_tasks: BackgroundTasks):
         except Exception as exc:
             logger.warning("Could not pre-populate whatsapp_conversations for %s: %s", whatsapp_phone, exc)
 
+    # Immediately notify salesperson of new Property Enquiry submission upon form submit
+    try:
+        sales_fields_initial = {
+            "Form": "Property Enquiry (Website form submitted)",
+            "Name": full_name,
+            "Email": str(form.email),
+            "Contact number": whatsapp_phone,
+            "Location preference": form.location_preference,
+            "Configuration / BHK": form.bhk_preference,
+            "Budget range": form.budget_range,
+            "Buying timeline": form.planning_to_buy,
+            "Payment option": form.payment_option,
+            "Special requirements": req or "None",
+            "WhatsApp Opt-in": "Yes (Connecting on WhatsApp)" if form.whatsapp_opt_in else "No",
+            "Status": "Form Submitted — Client redirected to WhatsApp",
+        }
+        background_tasks.add_task(
+            send_salesperson_notification,
+            f"New Property Enquiry - {full_name}",
+            sales_fields_initial,
+        )
+    except Exception as exc:
+        logger.warning("Could not dispatch immediate salesperson enquiry email: %s", exc)
+
     background_tasks.add_task(
         process_property_enquiry_submission,
         app.state,
@@ -1567,8 +1701,9 @@ async def create_enquiry(form: EnquiryForm, background_tasks: BackgroundTasks):
         background_tasks,
     )
     whatsapp_sender_clean = re.sub(r"\D", "", os.getenv("TWILIO_WHATSAPP_FROM", "14155238886")) or "14155238886"
-    whatsapp_url = f"https://wa.me/{whatsapp_sender_clean}?text=Hi" if form.whatsapp_opt_in else None
-    whatsapp_app_url = f"whatsapp://send?phone={whatsapp_sender_clean}&text=Hi" if form.whatsapp_opt_in else None
+    default_wa_text = quote_plus("Check your details here")
+    whatsapp_url = f"https://wa.me/{whatsapp_sender_clean}?text={default_wa_text}" if form.whatsapp_opt_in else None
+    whatsapp_app_url = f"whatsapp://send?phone={whatsapp_sender_clean}&text={default_wa_text}" if form.whatsapp_opt_in else None
     return {
         "message": (
             "Thank you! Your enquiry has been submitted. A WhatsApp confirmation has been sent to your phone."
@@ -1627,7 +1762,11 @@ async def admin_logout(request: Request):
 async def admin_page(request: Request):
     if not request.session.get("admin"):
         return RedirectResponse("/admin/login")
-    return FileResponse(BASE_DIR / "admin" / "admin.html")
+    response = FileResponse(BASE_DIR / "admin" / "admin.html")
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
 
 
 # ------------------------------------------------------------- Admin: leads
@@ -2383,6 +2522,16 @@ async def sync_and_save_upserted_leads(app_state, background_tasks: BackgroundTa
                 except Exception:
                     pass
 
+    # 4b. Purge any stale/orphaned records in upserted_leads that no longer exist in upserted_list
+    valid_lead_ids = [lead["id"] for lead in upserted_list if lead.get("id")]
+    try:
+        if valid_lead_ids:
+            await app_state.upserted_leads.delete_many({"id": {"$nin": valid_lead_ids}})
+        else:
+            await app_state.upserted_leads.delete_many({})
+    except Exception as e:
+        logger.warning("Failed to purge orphaned upserted_leads: %s", e)
+
     # 5. Automatic Zoho CRM sync for any unsynced qualified Hot leads
     for hot_lead in leads_to_auto_sync:
         lead_id = hot_lead["id"]
@@ -2605,6 +2754,45 @@ async def admin_list_upsert_leads(background_tasks: BackgroundTasks):
     return await sync_and_save_upserted_leads(app.state, background_tasks)
 
 
+async def _bg_delete_zoho_and_sync(app_state, zoho_lead_id, email, phone, lead_doc):
+    """Background task to remove a lead from Zoho CRM and re-sync upserted leads without delaying admin UI."""
+    from zoho_crm import delete_zoho_lead
+    try:
+        await run_in_threadpool(
+            delete_zoho_lead,
+            lead_id=zoho_lead_id,
+            email=email,
+            phone=phone,
+            lead_doc=lead_doc,
+        )
+    except Exception as exc:
+        logger.warning("Background Zoho delete error for %s: %s", email or phone, exc)
+    try:
+        await sync_and_save_upserted_leads(app_state)
+    except Exception as exc:
+        logger.warning("Background sync after delete error: %s", exc)
+
+
+async def _bg_batch_delete_zoho_and_sync(app_state, zoho_cleanups):
+    """Background task to process multiple Zoho CRM deletions and re-sync upserted leads."""
+    from zoho_crm import delete_zoho_lead
+    for zoho_lead_id, email, phone, lead_doc in zoho_cleanups:
+        try:
+            await run_in_threadpool(
+                delete_zoho_lead,
+                lead_id=zoho_lead_id,
+                email=email,
+                phone=phone,
+                lead_doc=lead_doc,
+            )
+        except Exception as exc:
+            logger.warning("Background batch Zoho delete error for %s: %s", email or phone, exc)
+    try:
+        await sync_and_save_upserted_leads(app_state)
+    except Exception as exc:
+        logger.warning("Background batch sync after delete error: %s", exc)
+
+
 class BatchDeleteRequest(BaseModel):
     items: list[dict]  # [{"id": str, "entity": "contact" | "enquiry" | "upsert" | "conversation"}]
 
@@ -2622,6 +2810,11 @@ async def admin_batch_delete_leads(payload: BatchDeleteRequest, background_tasks
     if enquiry_ids:
         e_res = await app.state.enquiries.delete_many({"_id": {"$in": enquiry_ids}})
         deleted_count += e_res.deleted_count
+    if conversation_ids:
+        conv_res = await app.state.whatsapp_conversations.delete_many({"_id": {"$in": conversation_ids}})
+        deleted_count += conv_res.deleted_count
+
+    zoho_cleanups = []
     if upsert_ids:
         for uid in upsert_ids:
             try:
@@ -2631,14 +2824,8 @@ async def admin_batch_delete_leads(payload: BatchDeleteRequest, background_tasks
                     lead_phone = lead.get("phone") or ""
                     digits = re.sub(r"\D", "", lead_phone)[-10:] if lead_phone else ""
                     zoho_lead_id = lead.get("zoho_lead_id")
-                    from zoho_crm import delete_zoho_lead
-                    await run_in_threadpool(
-                        delete_zoho_lead,
-                        lead_id=zoho_lead_id,
-                        email=lead_email,
-                        phone=lead_phone,
-                        lead_doc=lead,
-                    )
+                    zoho_cleanups.append((zoho_lead_id, lead_email, lead_phone, lead))
+
                     # Targeted deletion: delete only the specific underlying records linked to this lead
                     record_items = lead.get("records") or []
                     c_ids = [oid(r["id"]) for r in record_items if r.get("entity") == "contact" and r.get("id")]
@@ -2673,10 +2860,12 @@ async def admin_batch_delete_leads(payload: BatchDeleteRequest, background_tasks
                 logger.debug("Batch delete zoho/local cleanup notice for %s: %s", uid, ex)
         u_res = await app.state.upserted_leads.delete_many({"id": {"$in": upsert_ids}})
         deleted_count += u_res.deleted_count
-    if conversation_ids:
-        conv_res = await app.state.whatsapp_conversations.delete_many({"_id": {"$in": conversation_ids}})
-        deleted_count += conv_res.deleted_count
-    background_tasks.add_task(sync_and_save_upserted_leads, app.state)
+
+    if zoho_cleanups:
+        background_tasks.add_task(_bg_batch_delete_zoho_and_sync, app.state, zoho_cleanups)
+    else:
+        background_tasks.add_task(sync_and_save_upserted_leads, app.state)
+
     return {"message": f"Successfully deleted {deleted_count} record(s).", "deleted_count": deleted_count}
 
 
@@ -3040,21 +3229,27 @@ async def sync_calendly_api_bookings(app_state, force: bool = False) -> dict:
         )
         synced_count += 1
 
-        # 2. Match with upserted_leads: strict matching by invitee_email
+        # 2. Match with upserted_leads strictly by verified invitee email (prevent shared phone cross-matching)
         matched_leads = []
         if email:
             matched_leads = await app_state.upserted_leads.find(
                 {"email": {"$regex": f"^{re.escape(email)}$", "$options": "i"}}
             ).to_list(10)
+        elif digits and len(digits) >= 10:
+            # Fallback to phone ONLY if booking has no invitee email
+            matched_leads = await app_state.upserted_leads.find({
+                "$or": [
+                    {"phone": {"$regex": f"{digits}$"}},
+                    {"mobile_number": {"$regex": f"{digits}$"}},
+                    {"contact_number": {"$regex": f"{digits}$"}},
+                ]
+            }).to_list(5)
 
         for m_lead in matched_leads:
             lead_id = m_lead["id"]
-            # Strict: Lead is booked ONLY if customer actually opened/clicked our Calendly link
-            has_clicked_link = bool(
-                m_lead.get("calendly_clicked_at")
-                or m_lead.get("calendly_clicked")
-            )
-            if not has_clicked_link:
+            lead_m_email = (m_lead.get("email") or "").strip().lower()
+            # Strict safety: if both lead and booking have emails, they MUST match
+            if lead_m_email and email and lead_m_email != email:
                 continue
 
             is_already_notified = bool(m_lead.get("salesperson_booking_notified"))
@@ -3079,17 +3274,19 @@ async def sync_calendly_api_bookings(app_state, force: bool = False) -> dict:
                 {"$set": update_fields}
             )
             try:
-                await app_state.contacts.update_many(
-                    {"email": {"$regex": f"^{re.escape(email)}$", "$options": "i"}},
-                    {"$set": {
-                        "calendly_booking": booking_doc,
-                        "calendly_clicked": True,
-                        "is_booked": True,
-                        "status": "Lead Booked",
-                    }}
-                )
+                if email:
+                    await app_state.contacts.update_many(
+                        {"email": {"$regex": f"^{re.escape(email)}$", "$options": "i"}},
+                        {"$set": {
+                            "calendly_booking": booking_doc,
+                            "calendly_clicked": True,
+                            "is_booked": True,
+                            "status": "Lead Booked",
+                        }}
+                    )
             except Exception:
                 pass
+            booked_leads_count += 1
             booked_leads_count += 1
 
     return {"synced_events": synced_count, "matched_leads": booked_leads_count, "status": "success"}
@@ -3112,14 +3309,19 @@ async def admin_list_calendly_leads(background_tasks: BackgroundTasks):
 
     cal_events = await app.state.calendly_webhook_events.find({}).sort("received_at", -1).limit(500).to_list()
     cal_by_email = {}
+    cal_by_phone = {}
     for ev in cal_events:
         em = (ev.get("invitee_email") or ev.get("email") or "").strip().lower()
+        ph = ev.get("invitee_phone") or ev.get("phone") or ""
+        ph_digits = re.sub(r"\D", "", ph)[-10:] if ph else ""
         st_raw = ev.get("start_time") or ev.get("event_start_time")
         st_dt = _parse_lead_dt(st_raw) if st_raw else None
         if st_dt and st_dt < (now - timedelta(days=2)):
             continue
         if em and em not in cal_by_email:
             cal_by_email[em] = ev
+        if ph_digits and ph_digits not in cal_by_phone:
+            cal_by_phone[ph_digits] = ev
 
     cal_emails = [e for e in cal_by_email.keys() if e]
     or_clauses = [
@@ -3213,28 +3415,24 @@ async def admin_list_calendly_leads(background_tasks: BackgroundTasks):
             created_dt = _parse_lead_dt(lead.get("created_at")) or now
             has_clicked = bool((now - created_dt).total_seconds() < 86400 * 30)
 
-        # Check existing booking: must strictly match this lead's email
+        # Check existing booking in lead doc OR in calendly_webhook_events strictly matching lead email
         booking = lead.get("calendly_booking")
+        if not booking and lead_email and lead_email in cal_by_email:
+            booking = cal_by_email[lead_email]
+
+        # Strict safety: A booking belongs to this lead ONLY if invitee_email strictly matches this lead's email
         if booking and lead_email:
             b_em = (booking.get("invitee_email") or booking.get("email") or "").strip().lower()
             if b_em and b_em != lead_email:
                 booking = None
 
-        # Verify booking is not a stale session predating this latest submission
+        # Verify booking is not a stale past session predating this latest submission by > 24 hours
         if booking:
-            booking_dt = _parse_lead_dt(booking.get("received_at") or booking.get("created_at"))
-            if booking_dt and booking_dt < (latest_sub_dt - timedelta(minutes=5)):
+            booking_dt = _parse_lead_dt(booking.get("received_at") or booking.get("created_at") or booking.get("start_time"))
+            if booking_dt and booking_dt < (latest_sub_dt - timedelta(hours=24)):
                 booking = None
 
-        # Option B (Strict): Lead is booked ONLY if customer clicked our Calendly link AND filled the meeting
-        has_cal_booking = bool(
-            has_clicked
-            and booking
-            and (
-                not booking.get("invitee_email")
-                or (booking.get("invitee_email") or "").strip().lower() == lead_email
-            )
-        )
+        has_cal_booking = bool(booking)
         is_booked = bool(has_cal_booking or lead.get("manually_marked_booked"))
 
         if is_booked and not booking and lead.get("calendly_booking"):
@@ -3555,29 +3753,39 @@ async def admin_send_calendly_followup(lead_id: str, background_tasks: Backgroun
 
 @app.delete("/api/admin/calendly-leads/{lead_id}", dependencies=[Depends(require_admin)])
 async def admin_delete_calendly_lead(lead_id: str, background_tasks: BackgroundTasks):
-    """Admin manual deletion of a Calendly / Hot Lead from Zoho CRM and MongoDB database."""
-    lead = await app.state.upserted_leads.find_one({"id": lead_id})
+    """Admin manual deletion of a Calendly / Upserted Hot Lead from Zoho CRM and MongoDB database."""
+    query = {"$or": [{"id": lead_id}, {"_id": ObjectId(lead_id)}]} if ObjectId.is_valid(lead_id) else {"id": lead_id}
+    lead = await app.state.upserted_leads.find_one(query)
     if not lead:
-        raise HTTPException(status_code=404, detail="Lead not found")
+        # Check if lead_id was a raw contact, enquiry, or whatsapp_conversation _id
+        if ObjectId.is_valid(lead_id):
+            oid_val = ObjectId(lead_id)
+            c_res = await app.state.contacts.delete_one({"_id": oid_val})
+            e_res = await app.state.enquiries.delete_one({"_id": oid_val})
+            w_res = await app.state.whatsapp_conversations.delete_one({"_id": oid_val})
+            if c_res.deleted_count or e_res.deleted_count or w_res.deleted_count:
+                background_tasks.add_task(sync_and_save_upserted_leads, app.state)
+                return {
+                    "status": "success",
+                    "message": "Lead permanently deleted from database by Administrator.",
+                    "zoho_deleted": False,
+                }
+        # If already deleted, run sync in background so ghost records are purged
+        background_tasks.add_task(sync_and_save_upserted_leads, app.state)
+        return {
+            "status": "success",
+            "message": "Lead was already removed from the database.",
+            "zoho_deleted": False,
+        }
 
     lead_email = (lead.get("email") or "").strip().lower()
     lead_phone = lead.get("phone") or ""
     zoho_lead_id = lead.get("zoho_lead_id")
 
-    # 1. Delete from Zoho CRM directly
-    from zoho_crm import delete_zoho_lead
-    zoho_deleted = await run_in_threadpool(
-        delete_zoho_lead,
-        lead_id=zoho_lead_id,
-        email=lead_email,
-        phone=lead_phone,
-        lead_doc=lead,
-    )
+    # 1. Delete from MongoDB upserted_leads immediately
+    await app.state.upserted_leads.delete_many(query)
 
-    # 2. Delete from MongoDB upserted_leads
-    await app.state.upserted_leads.delete_one({"id": lead_id})
-
-    # 3. Clean up only the specific underlying records linked to this lead
+    # 2. Clean up only the specific underlying records linked to this lead immediately
     digits = re.sub(r"\D", "", lead_phone)[-10:] if lead_phone else ""
     record_items = lead.get("records") or []
     c_ids = [oid(r["id"]) for r in record_items if r.get("entity") == "contact" and r.get("id")]
@@ -3609,11 +3817,20 @@ async def admin_delete_calendly_lead(lead_id: str, background_tasks: BackgroundT
     if lead_email:
         await app.state.calendly_webhook_events.delete_many({"invitee_email": lead_email})
 
-    background_tasks.add_task(sync_and_save_upserted_leads, app.state)
+    # 3. Offload slow Zoho CRM cloud deletion and full sync to background task
+    background_tasks.add_task(
+        _bg_delete_zoho_and_sync,
+        app.state,
+        zoho_lead_id,
+        lead_email,
+        lead_phone,
+        lead,
+    )
+
     return {
         "status": "success",
         "message": "Lead permanently deleted from Zoho CRM and local database by Administrator.",
-        "zoho_deleted": zoho_deleted,
+        "zoho_deleted": True,
     }
 
 
@@ -3645,6 +3862,196 @@ async def track_calendly_click(payload: TrackClickPayload, request: Request, bac
     return {"status": "ok"}
 
 
+# -------------------------------------------------------------
+# Admin: WhatsApp AI Assistant Questions CRUD
+# -------------------------------------------------------------
+class AdminWhatsAppQuestionCreate(BaseModel):
+    slot_key: str = Field(..., min_length=2, max_length=60, description="Slot key identifier, e.g. 'parking_needed'")
+    title: str = Field(..., min_length=2, max_length=100, description="Display title for admin, e.g. 'Parking Preference'")
+    question_text: str = Field(..., min_length=3, max_length=1000, description="Question asked to the customer in English")
+    question_text_hi: Optional[str] = Field(None, max_length=1000, description="Question in Hindi (optional)")
+    question_text_hinglish: Optional[str] = Field(None, max_length=1000, description="Question in Hinglish (optional)")
+    options: list[str] = Field(default_factory=list, description="Predefined choices (leave empty for free-form text)")
+    is_required: bool = Field(default=True, description="Whether question must be answered before completion")
+    order: int = Field(default=1, ge=1, le=100, description="Sequence order (1-100)")
+    ai_guidance: Optional[str] = Field(None, max_length=1000, description="Advisory instructions for Gemini on how to ask/advise")
+    enabled: bool = Field(default=True, description="Whether question is active in WhatsApp bot")
+
+
+class AdminWhatsAppQuestionUpdate(BaseModel):
+    slot_key: Optional[str] = Field(None, min_length=2, max_length=60)
+    title: Optional[str] = Field(None, min_length=2, max_length=100)
+    question_text: Optional[str] = Field(None, min_length=3, max_length=1000)
+    question_text_hi: Optional[str] = Field(None, max_length=1000)
+    question_text_hinglish: Optional[str] = Field(None, max_length=1000)
+    options: Optional[list[str]] = None
+    is_required: Optional[bool] = None
+    order: Optional[int] = Field(None, ge=1, le=100)
+    ai_guidance: Optional[str] = None
+    enabled: Optional[bool] = None
+
+
+@app.get("/api/admin/whatsapp/questions", dependencies=[Depends(require_admin)])
+async def admin_list_whatsapp_questions():
+    """Return all WhatsApp questions configured for property enquiry flow, sorted by order."""
+    from question_manager import get_all_questions_async
+    return await get_all_questions_async(app.state)
+
+
+@app.post("/api/admin/whatsapp/questions", status_code=201, dependencies=[Depends(require_admin)])
+async def admin_create_whatsapp_question(payload: AdminWhatsAppQuestionCreate):
+    """Create a new question to be asked by the WhatsApp AI assistant."""
+    clean_slot = re.sub(r"[^a-zA-Z0-9_]", "_", payload.slot_key.strip().lower()).strip("_")
+    if not clean_slot:
+        raise HTTPException(status_code=400, detail="Invalid slot_key. Use letters, numbers, and underscores.")
+
+    coll = app.state.whatsapp_questions
+    existing = await coll.find_one({
+        "$or": [{"slot_key": clean_slot}, {"id": f"q_{clean_slot}"}]
+    })
+    if existing:
+        raise HTTPException(status_code=400, detail=f"Question with slot key '{clean_slot}' already exists.")
+
+    now = datetime.now(timezone.utc)
+    q_id = f"q_{clean_slot}"
+    doc = {
+        "id": q_id,
+        "slot_key": clean_slot,
+        "title": payload.title.strip(),
+        "question_text": payload.question_text.strip(),
+        "question_text_hi": payload.question_text_hi.strip() if payload.question_text_hi else None,
+        "question_text_hinglish": payload.question_text_hinglish.strip() if payload.question_text_hinglish else None,
+        "options": [str(opt).strip() for opt in payload.options if str(opt).strip()],
+        "is_required": bool(payload.is_required),
+        "order": int(payload.order),
+        "ai_guidance": payload.ai_guidance.strip() if payload.ai_guidance else "",
+        "enabled": bool(payload.enabled),
+        "created_at": now,
+        "updated_at": now,
+    }
+    await coll.insert_one(doc)
+    from question_manager import invalidate_questions_cache, serialize_question
+    invalidate_questions_cache()
+    return serialize_question(doc)
+
+
+@app.put("/api/admin/whatsapp/questions/{question_id}", dependencies=[Depends(require_admin)])
+async def admin_update_whatsapp_question(question_id: str, payload: AdminWhatsAppQuestionUpdate):
+    """Update an existing WhatsApp AI question."""
+    coll = app.state.whatsapp_questions
+    q_filter = {"$or": [{"id": question_id}, {"slot_key": question_id}]}
+    try:
+        q_filter["$or"].append({"_id": ObjectId(question_id)})
+    except Exception:
+        pass
+
+    existing = await coll.find_one(q_filter)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Question not found")
+
+    updates = {"updated_at": datetime.now(timezone.utc)}
+    if payload.title is not None:
+        updates["title"] = payload.title.strip()
+    if payload.question_text is not None:
+        updates["question_text"] = payload.question_text.strip()
+    if payload.question_text_hi is not None:
+        updates["question_text_hi"] = payload.question_text_hi.strip() if payload.question_text_hi else None
+    if payload.question_text_hinglish is not None:
+        updates["question_text_hinglish"] = payload.question_text_hinglish.strip() if payload.question_text_hinglish else None
+    if payload.options is not None:
+        updates["options"] = [str(opt).strip() for opt in payload.options if str(opt).strip()]
+    if payload.is_required is not None:
+        updates["is_required"] = bool(payload.is_required)
+    if payload.order is not None:
+        updates["order"] = int(payload.order)
+    if payload.ai_guidance is not None:
+        updates["ai_guidance"] = payload.ai_guidance.strip()
+    if payload.enabled is not None:
+        updates["enabled"] = bool(payload.enabled)
+    if payload.slot_key is not None:
+        clean_slot = re.sub(r"[^a-zA-Z0-9_]", "_", payload.slot_key.strip().lower()).strip("_")
+        if clean_slot and clean_slot != existing.get("slot_key"):
+            collision = await coll.find_one({"slot_key": clean_slot, "_id": {"$ne": existing["_id"]}})
+            if collision:
+                raise HTTPException(status_code=400, detail=f"Slot key '{clean_slot}' is already in use by another question.")
+            updates["slot_key"] = clean_slot
+
+    await coll.update_one({"_id": existing["_id"]}, {"$set": updates})
+    from question_manager import invalidate_questions_cache, serialize_question
+    invalidate_questions_cache()
+    updated_doc = await coll.find_one({"_id": existing["_id"]})
+    return serialize_question(updated_doc)
+
+
+@app.delete("/api/admin/whatsapp/questions/{question_id}", dependencies=[Depends(require_admin)])
+async def admin_delete_whatsapp_question(question_id: str):
+    """Delete a WhatsApp enquiry question."""
+    coll = app.state.whatsapp_questions
+    q_filter = {"$or": [{"id": question_id}, {"slot_key": question_id}]}
+    try:
+        q_filter["$or"].append({"_id": ObjectId(question_id)})
+    except Exception:
+        pass
+
+    existing = await coll.find_one(q_filter)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Question not found")
+
+    await coll.delete_one({"_id": existing["_id"]})
+    from question_manager import invalidate_questions_cache
+    invalidate_questions_cache()
+    return {"status": "success", "message": f"Question '{existing.get('title', question_id)}' deleted successfully"}
+
+
+@app.post("/api/admin/whatsapp/questions/reset-defaults", dependencies=[Depends(require_admin)])
+async def admin_reset_default_whatsapp_questions():
+    """Reset WhatsApp enquiry questions back to the standard 6 defaults."""
+    coll = app.state.whatsapp_questions
+    await coll.delete_many({})
+    from question_manager import DEFAULT_WHATSAPP_QUESTIONS, invalidate_questions_cache, serialize_question
+    now_dt = datetime.now(timezone.utc)
+    seed_docs = []
+    for item in DEFAULT_WHATSAPP_QUESTIONS:
+        doc = dict(item)
+        doc["created_at"] = now_dt
+        doc["updated_at"] = now_dt
+        seed_docs.append(doc)
+    await coll.insert_many(seed_docs)
+    invalidate_questions_cache()
+    docs = await coll.find({}).sort("order", 1).to_list(100)
+    return [serialize_question(d) for d in docs]
+
+
+@app.post("/api/admin/clear-cache", dependencies=[Depends(require_admin)])
+async def admin_clear_all_caches(clear_conversations: bool = False):
+    """Clear all application in-memory caches, question caches, location caches, and optionally active conversations."""
+    from question_manager import invalidate_questions_cache
+    from location_service import _photon_locations_cached, _nominatim_locations_cached, _verified_locations_cached
+    from zoho_crm import _clear_access_token
+
+    global _cached_calendly_user_uri
+    _cached_calendly_user_uri = None
+    invalidate_questions_cache()
+    _photon_locations_cached.cache_clear()
+    _nominatim_locations_cached.cache_clear()
+    _verified_locations_cached.cache_clear()
+    _clear_access_token()
+
+    if hasattr(app.state, "upserted_leads"):
+        await app.state.upserted_leads.delete_many({})
+
+    cleared_convs = 0
+    if clear_conversations and hasattr(app.state, "conversations"):
+        res = await app.state.conversations.delete_many({"$or": [{"status": "in_progress"}, {"status": "awaiting_customer_start"}]})
+        cleared_convs = res.deleted_count
+
+    return {
+        "status": "success",
+        "message": "All system in-memory and database caches successfully cleared",
+        "cleared_conversations": cleared_convs,
+    }
+
+
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 app.mount("/image", StaticFiles(directory=BASE_DIR / "image"), name="image")
 app.mount("/images", StaticFiles(directory=BASE_DIR / "image"), name="images")
@@ -3652,12 +4059,20 @@ app.mount("/images", StaticFiles(directory=BASE_DIR / "image"), name="images")
 
 @app.get("/", include_in_schema=False)
 async def home():
-    return FileResponse(BASE_DIR / "static" / "index.html")
+    res = FileResponse(BASE_DIR / "static" / "index.html")
+    res.headers["Cache-Control"] = "no-cache, no-store, must-revalidate, max-age=0"
+    res.headers["Pragma"] = "no-cache"
+    res.headers["Expires"] = "0"
+    return res
 
 
 @app.get("/enquiry", include_in_schema=False)
 async def enquiry_page():
-    return FileResponse(BASE_DIR / "static" / "enquiry.html")
+    res = FileResponse(BASE_DIR / "static" / "enquiry.html")
+    res.headers["Cache-Control"] = "no-cache, no-store, must-revalidate, max-age=0"
+    res.headers["Pragma"] = "no-cache"
+    res.headers["Expires"] = "0"
+    return res
 
 
 def send_whatsapp_thankyou_template(
@@ -4317,6 +4732,10 @@ async def complete_and_qualify_whatsapp_lead(
         "created_at": conversation.get("created_at", now),
         "completed_at": now,
     }
+    lead["whatsapp_answers"] = dict(answers)
+    for k, v in answers.items():
+        if k not in lead and not k.startswith("_"):
+            lead[k] = v
 
     # 1. AI Analysis on completed customer questionnaire
     rating: str = "Warm"
@@ -4779,6 +5198,7 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
     is_standalone_greeting = bool(
         re.fullmatch(r"(?i)\s*(hi|hello|hey|hola|namaste|namaskar|pranam)\b[!.,]*", clean_text)
         or re.fullmatch(r"(?i)\s*(hi|hello|hey|namaste|namaskar|pranam)\s+(profilent|team|bot|there|all|everyone)\b[!.,]*", clean_text)
+        or re.search(r"(?i)\bcheck\s+you(r)?\s+details(\s+here)?\b", clean_text)
         or clean_text in {"नमस्ते", "नमस्कार", "प्रणाम", "नमस्ते जी"}
     )
 
@@ -4889,27 +5309,47 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
         else:
             greet_line = f"Hi {first_name}! Welcome to Profilent. 👋" if first_name and first_name != "there" else "Hi! Welcome to Profilent. 👋"
 
-        # Reset questionnaire slots so customer goes through the interactive AI assistant
-        answers["location_preference"] = ""
-        answers["location_city"] = ""
-        answers["location_city_title"] = ""
-        answers["location_area"] = ""
-        answers["planning_to_buy"] = ""
-        answers["budget_range"] = ""
-        answers["payment_option"] = ""
-        answers["bhk_preference"] = ""
-        answers["remarks_requirements"] = ""
+        # Reset questionnaire slots ONLY when customer explicitly requests a restart/reset
+        if is_reset_cmd:
+            answers["location_preference"] = ""
+            answers["location_city"] = ""
+            answers["location_city_title"] = ""
+            answers["location_area"] = ""
+            answers["planning_to_buy"] = ""
+            answers["budget_range"] = ""
+            answers["payment_option"] = ""
+            answers["bhk_preference"] = ""
+            answers["remarks_requirements"] = ""
 
         # Check if customer specified an initial city on the form
-        from conversation_ai import get_locality_data_or_ai_suggestions, is_valid_location
-        form_loc = (answers.get("form_location") or "").strip()
+        from conversation_ai import get_locality_data_or_ai_suggestions, is_valid_location, ORDERED_REQUIRED_SLOTS
+        form_loc = (answers.get("form_location") or answers.get("location_preference") or "").strip()
         loc_data = None
         if form_loc:
             valid_loc, place_name = is_valid_location(form_loc)
             if valid_loc:
                 loc_data = get_locality_data_or_ai_suggestions(place_name, lang=lang)
 
-        if loc_data:
+        if answers.get("location_preference") and not is_reset_cmd:
+            loc_pref = answers.get("location_preference")
+            missing_required = [s for s in ORDERED_REQUIRED_SLOTS if not answers.get(s)]
+            if missing_required:
+                next_slot = missing_required[0]
+                next_q = get_question_prompt(next_slot, lang=lang)
+                welcome_msg = (
+                    f"{greet_line}\n\n"
+                    f"Great choice of location in {loc_pref}! ⭐\n"
+                    "To help our property specialist prepare the best tailored options for you, I just need a few quick details.\n\n"
+                    f"{next_q}"
+                )
+            else:
+                welcome_msg = format_completion_summary_message(
+                    answers,
+                    first_name=first_name,
+                    schedule_url=schedule_page_url(),
+                    lang=lang,
+                )
+        elif loc_data:
             city_title = loc_data.get("title") or form_loc.title()
             answers["location_city"] = form_loc.lower()
             answers["location_city_title"] = city_title
@@ -5060,13 +5500,11 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
                 )
                 # If requirements/preferences were updated during the follow-up, sync to enquiry document
                 lead_update = {}
-                for f_key in [
-                    "location_preference", "bhk_preference", "budget_range",
-                    "planning_to_buy", "payment_option", "remarks_requirements"
-                ]:
-                    if updated_answers.get(f_key):
-                        lead_update[f_key] = updated_answers[f_key]
+                for k, v in updated_answers.items():
+                    if v and not k.startswith("_") and k not in {"form_requirement", "language", "dynamic_locality_options"}:
+                        lead_update[k] = v
                 if lead_update:
+                    lead_update["whatsapp_answers"] = dict(updated_answers)
                     lead_update["requirement_summary"] = requirements_summary(updated_answers)
                     lead_update["requirement"] = updated_answers.get("remarks_requirements") or lead_update.get("requirement_summary", "")
                     lead_update["updated_at"] = now
@@ -5733,20 +6171,13 @@ async def process_calendly_invitee(payload: dict, state, background_tasks: Backg
     clean_lead_digits = re.sub(r"\D", "", booking_phone)[-10:] if booking_phone else ""
     if not target_upsert_lead and len(clean_lead_digits) >= 10:
         cand_upsert = await state.upserted_leads.find({"phone": {"$regex": f"{clean_lead_digits}$"}}).to_list(5)
-        if len(cand_upsert) == 1 and not cand_upsert[0].get("email"):
-            target_upsert_lead = cand_upsert[0]
+        for cand in cand_upsert:
+            cand_em = (cand.get("email") or "").strip().lower()
+            if not email or not cand_em or cand_em == email:
+                target_upsert_lead = cand
+                break
 
     if target_upsert_lead:
-        # Option B: Mark booked if lead clicked tracked link OR booked using their verified email
-        has_clicked_tracked_link = bool(
-            target_upsert_lead.get("calendly_clicked_at")
-            or target_upsert_lead.get("calendly_clicked")
-            or (target_upsert_lead.get("email") and target_upsert_lead.get("email").strip().lower() == email)
-        )
-        if not has_clicked_tracked_link:
-            logger.info("Calendly webhook booking for %s skipped because lead did not click tracking link (Option B).", email)
-            return {"received": True, "matched": True, "ignored_reason": "link_not_clicked"}
-
         try:
             await state.upserted_leads.update_one(
                 {"id": target_upsert_lead["id"]},

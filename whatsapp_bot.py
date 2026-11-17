@@ -263,6 +263,24 @@ def format_completion_summary_message(
             f"👉 {visit_url}"
         )
 
+    # Add any custom question answers dynamically configured by Admin
+    try:
+        from question_manager import get_active_questions_sync
+        active_qs = get_active_questions_sync()
+        standard_keys = {
+            "location_preference", "planning_to_buy", "budget_range",
+            "payment_option", "bhk_preference", "remarks_requirements",
+            "full_name", "first_name", "last_name", "phone", "email",
+            "mobile_number", "contact_number", "customer_email",
+        }
+        for q in active_qs:
+            sk = q.get("slot_key")
+            if sk and sk not in standard_keys and answers.get(sk):
+                label = q.get("title") or sk.replace("_", " ").title()
+                bullets.append(f"• {label}: {answers[sk]}")
+    except Exception:
+        pass
+
     bullet_block = "\n".join(bullets)
     return f"{spoke_prefix}{greet}\n\n{bullet_block}\n\n{note}\n\n{cta}"
 
@@ -731,21 +749,25 @@ async def start_questionnaire(
     # Otherwise, insert a BRAND NEW conversation document so each user gets their own separate row!
     if target_conv:
         conv_id = target_conv["_id"]
+        merged_answers = dict(target_conv.get("answers") or {})
+        for k, v in answers.items():
+            if v or not merged_answers.get(k):
+                merged_answers[k] = v
         await conversations.update_one(
             {"_id": conv_id},
             {
                 "$set": {
                     "phone": phone,
                     "contact_id": contact_id,
-                    "first_name": answers["first_name"],
-                    "last_name": answers["last_name"],
-                    "full_name": full_name,
-                    "email": email,
+                    "first_name": answers["first_name"] or merged_answers.get("first_name", ""),
+                    "last_name": answers["last_name"] or merged_answers.get("last_name", ""),
+                    "full_name": full_name or merged_answers.get("full_name", ""),
+                    "email": email or merged_answers.get("email", ""),
                     "stage": "q_ai_flow",
-                    "answers": answers,
-                    "form_requirement": requirement.strip(),
-                    "requirement_messages": [requirement.strip()] if requirement.strip() else [],
-                    "status": "awaiting_location",
+                    "answers": merged_answers,
+                    "form_requirement": requirement.strip() or target_conv.get("form_requirement", ""),
+                    "requirement_messages": [requirement.strip()] if requirement.strip() else target_conv.get("requirement_messages", []),
+                    "status": target_conv.get("status") or "awaiting_location",
                     "updated_at": now_utc,
                 },
                 "$unset": {

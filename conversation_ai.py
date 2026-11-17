@@ -24,6 +24,11 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 from whatsapp_bot import build_prefilled_calendly_url, format_completion_summary_message
+from question_manager import (
+    get_active_questions_sync,
+    format_question_prompt_for_slot,
+    invalidate_questions_cache,
+)
 
 load_dotenv()
 
@@ -41,7 +46,37 @@ _ai_session.mount("http://", _ai_adapter)
 
 _last_env_check = 0.0
 _cached_gemini_key = ""
-_cached_gemini_model = "gemini-3.5-flash-lite"
+_cached_gemini_model = "gemini-3.1-flash-lite"
+
+PRIMARY_GEMINI_MODELS = [
+    "gemini-3.1-flash-lite",
+    "gemini-3.1-flash-lite-preview",
+    "gemini-3-flash-preview",
+    "gemini-3.5-flash-lite",
+    "gemini-3.5-flash",
+    "gemini-flash-latest",
+]
+
+_exhausted_models: dict[str, float] = {}
+
+def _is_model_exhausted(model_name: str) -> bool:
+    exp = _exhausted_models.get(model_name)
+    if exp and time.monotonic() < exp:
+        return True
+    return False
+
+def _mark_model_exhausted(model_name: str, duration_sec: float = 600.0) -> None:
+    _exhausted_models[model_name] = time.monotonic() + duration_sec
+    logger.warning("Gemini model %s marked exhausted / rate-limited for %ds", model_name, int(duration_sec))
+
+def _get_candidate_models(configured_model: str) -> list[str]:
+    candidates = []
+    if configured_model and not _is_model_exhausted(configured_model):
+        candidates.append(configured_model)
+    for m in PRIMARY_GEMINI_MODELS:
+        if m not in candidates and not _is_model_exhausted(m):
+            candidates.append(m)
+    return candidates
 
 
 def _get_gemini_config() -> tuple[str, str]:
@@ -51,7 +86,7 @@ def _get_gemini_config() -> tuple[str, str]:
     if now - _last_env_check > 5.0 or not _cached_gemini_key:
         load_dotenv(override=False)
         _cached_gemini_key = os.getenv("GEMINI_API_KEY", "").strip()
-        raw_model = os.getenv("GEMINI_MODEL", "gemini-3.5-flash").strip() or "gemini-3.5-flash"
+        raw_model = os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite").strip() or "gemini-3.1-flash-lite"
         _cached_gemini_model = raw_model
         _last_env_check = now
     return _cached_gemini_key, _cached_gemini_model
@@ -320,13 +355,46 @@ QUESTION_PROMPTS_MULTILINGUAL = {
 
 QUESTION_PROMPTS = QUESTION_PROMPTS_MULTILINGUAL["en"]
 
-ORDERED_REQUIRED_SLOTS = [
+DEFAULT_REQUIRED_SLOTS = [
     "location_preference",
     "planning_to_buy",
     "budget_range",
     "payment_option",
     "bhk_preference",
 ]
+
+
+class _DynamicRequiredSlots(list):
+    """Dynamic list proxy that returns active required question slot keys configured by Admin."""
+
+    def _get_slots(self) -> list[str]:
+        try:
+            qs = get_active_questions_sync()
+            req = [q["slot_key"] for q in qs if q.get("is_required", True) and q.get("slot_key")]
+            return req if req else DEFAULT_REQUIRED_SLOTS
+        except Exception:
+            return DEFAULT_REQUIRED_SLOTS
+
+    def __iter__(self):
+        return iter(self._get_slots())
+
+    def __contains__(self, item):
+        return item in self._get_slots()
+
+    def __len__(self):
+        return len(self._get_slots())
+
+    def __getitem__(self, idx):
+        return self._get_slots()[idx]
+
+    def __bool__(self):
+        return bool(self._get_slots())
+
+    def __repr__(self):
+        return repr(self._get_slots())
+
+
+ORDERED_REQUIRED_SLOTS = _DynamicRequiredSlots()
 
 _SPEAK_TO_HUMAN_PATTERN = re.compile(
     r"\b(speak to (?:a )?(?:person|human|executive|agent|representative|someone)|"
@@ -352,21 +420,19 @@ _HINDI_NUMS = {
 
 
 def detect_language(text: str, current_lang: str = "en") -> str:
-    """Detect whether user text is in Hindi (Devanagari), Hinglish (Romanized Hindi), or English."""
-    if not text:
-        return current_lang
-    if re.search(r"[\u0900-\u097F]", text):
-        return "hi"
-    if _HINGLISH_WORDS.search(text):
-        return "hinglish"
-    # Pure numbers, punctuation, or generic 'skip' should preserve the current language
-    if re.match(r"^[\s\d\.\,\#\-\(\)\/\:]+$", text) or text.strip().lower() in {"skip", "ok", "yes", "no"}:
-        return current_lang
-    return current_lang
+    """Strictly English only - Hindi and Hinglish disabled throughout the project."""
+    return "en"
 
 
 def get_question_prompt(slot: str, lang: str = "en") -> str:
-    """Retrieve localized question prompt for the given slot."""
+    """Retrieve localized question prompt for the given slot, checking dynamic admin questions first."""
+    try:
+        qs = get_active_questions_sync()
+        for q in qs:
+            if q.get("slot_key") == slot:
+                return format_question_prompt_for_slot(q, lang=lang)
+    except Exception:
+        pass
     prompts = QUESTION_PROMPTS_MULTILINGUAL.get(lang, QUESTION_PROMPTS_MULTILINGUAL["en"])
     return prompts.get(slot, QUESTION_PROMPTS_MULTILINGUAL["en"].get(slot, ""))
 
@@ -1114,14 +1180,14 @@ def verify_location_with_gemini(text: str) -> tuple[bool, str]:
             "maxOutputTokens": 100,
         },
     }
-    models = []
-    for m in [gemini_model, "gemini-flash-lite-latest", "gemini-3.5-flash-lite", "gemini-flash-latest"]:
-        if m and m not in models:
-            models.append(m)
+    models = _get_candidate_models(gemini_model)
     for model in models:
         try:
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={gemini_key}"
-            resp = _ai_session.post(url, headers={"Content-Type": "application/json"}, json=payload, timeout=(3.0, 8.0))
+            resp = _ai_session.post(url, headers={"Content-Type": "application/json"}, json=payload, timeout=(2.5, 4.5))
+            if resp.status_code == 429:
+                _mark_model_exhausted(model, 600.0)
+                continue
             if not resp.ok:
                 continue
             body = resp.json()
@@ -1645,6 +1711,30 @@ def _generate_assistant_acknowledgement(slot: str, value: str, lang: str = "en")
             "en": f"{value} is a fantastic choice for comfortable living! 🏢",
         }.get(lang, f"{value} is a fantastic choice for comfortable living! 🏢")
 
+    # Acknowledgements for feedback, ratings, and custom admin questions
+    if any(k in slot.lower() for k in ["feedback", "star", "rating", "review"]):
+        return {
+            "hi": "आपकी बहुमूल्य प्रतिक्रिया के लिए बहुत-बहुत धन्यवाद! ⭐",
+            "hinglish": "Aapke valuable feedback ke liye bohot shukriya! ⭐",
+            "en": "Thank you so much for your valuable feedback! ⭐",
+        }.get(lang, "Thank you so much for your valuable feedback! ⭐")
+
+    if slot == "remarks_requirements":
+        if val_l in {"none", "skip", "no", "nahi", "kuch nahi", "-", "null"}:
+            return ""
+        return {
+            "hi": "धन्यवाद, हमने आपकी विशेष आवश्यकताएं नोट कर ली हैं। ✍️",
+            "hinglish": "Thank you, humne aapki specific requirements note kar li hain! ✍️",
+            "en": "Thank you, I have noted your specific requirements! ✍️",
+        }.get(lang, "Thank you, I have noted your specific requirements! ✍️")
+
+    if slot not in {"location_preference", "planning_to_buy", "budget_range", "payment_option", "bhk_preference", "remarks_requirements"}:
+        return {
+            "hi": "धन्यवाद, हमने आपकी यह जानकारी नोट कर ली है। ✍️",
+            "hinglish": "Thank you, humne yeh details note kar li hain. ✍️",
+            "en": "Thank you, I have noted that down! ✍️",
+        }.get(lang, "Thank you, I have noted that down! ✍️")
+
     return ""
 
 
@@ -1697,7 +1787,19 @@ def _resolve_numbered_choice(user_message: str, slot: str) -> str | None:
         except ValueError:
             return None
     idx = num_val - 1
-    options = STANDARD_OPTIONS.get(slot, [])
+    options = []
+    try:
+        active_qs = get_active_questions_sync()
+        for q in active_qs:
+            if q.get("slot_key") == slot:
+                opts = q.get("options")
+                if opts and isinstance(opts, list):
+                    options = opts
+                    break
+    except Exception:
+        pass
+    if not options:
+        options = STANDARD_OPTIONS.get(slot, [])
     if 0 <= idx < len(options):
         return options[idx]
     return None
@@ -1799,6 +1901,26 @@ def _build_system_prompt(first_name: str, known_criteria: dict, is_followup: boo
     fn = (first_name.split()[0] if first_name else "there").strip()
     booking_url = schedule_url or os.getenv("CALENDLY_URL", "https://calendly.com/shailendra-profilent/30min")
     visit_booking_url = visit_url or os.getenv("CALENDLY_VISIT_URL", "https://calendly.com/rudrasinghdeo369/30min")
+
+    active_qs = []
+    try:
+        active_qs = get_active_questions_sync()
+    except Exception:
+        pass
+
+    if active_qs:
+        slot_lines = [f'    "{q.get("slot_key", "custom")}": "..."' for q in active_qs if q.get("slot_key")]
+        slots_schema_str = ",\n".join(slot_lines)
+    else:
+        slots_schema_str = (
+            '    "location_preference": "...",\n'
+            '    "planning_to_buy": "...",\n'
+            '    "budget_range": "...",\n'
+            '    "payment_option": "...",\n'
+            '    "bhk_preference": "...",\n'
+            '    "remarks_requirements": "..."'
+        )
+
     if is_followup:
         return (
             f"You are a friendly, consultative real estate enquiry assistant for Profilent in Uttarakhand (Haldwani, Nainital, Bhimtal, Almora). You are assisting {fn} on WhatsApp.\n\n"
@@ -1819,16 +1941,58 @@ def _build_system_prompt(first_name: str, known_criteria: dict, is_followup: boo
             f"Output MUST be a valid JSON object matching this schema:\n"
             f"{{\n"
             f'  "extracted_slots": {{\n'
-            f'    "location_preference": "...",\n'
-            f'    "planning_to_buy": "...",\n'
-            f'    "budget_range": "...",\n'
-            f'    "payment_option": "...",\n'
-            f'    "bhk_preference": "...",\n'
-            f'    "remarks_requirements": "..."\n'
+            f"{slots_schema_str}\n"
             f"  }},\n"
             f'  "reply_message": "...",\n'
             f'  "is_complete": false\n'
             f"}}"
+        )
+
+    if active_qs:
+        q_blocks = []
+        for i, q in enumerate(active_qs):
+            num = i + 1
+            q_title = q.get("title") or q.get("slot_key", f"Question {num}")
+            req_str = "(required)" if q.get("is_required", True) else "(optional)"
+            q_text = q.get("question_text", "")
+            block = f"{num}. {q_title} {req_str}\n   {q_text}"
+            opts = q.get("options") or []
+            if opts:
+                opt_strs = "\n".join(f"   {oi+1}. {opt}" for oi, opt in enumerate(opts))
+                block += f"\n{opt_strs}"
+            guidance = q.get("ai_guidance")
+            if guidance:
+                block += f"\n   *GUIDANCE*: {guidance}"
+            q_blocks.append(block)
+        questionnaire_text = "\n\n".join(q_blocks)
+    else:
+        questionnaire_text = (
+            "1. Location Preference (required)\n"
+            "   Ask which area/city they are interested in:\n"
+            "   1. Haldwani (Rampur Rd, Kaladhungi Rd, Bithoria, Mukhani)\n"
+            "   2. Nainital / Bhimtal\n"
+            "   3. Almora\n"
+            "   4. Other (please type the area)\n"
+            "   *LOCATION ADVISORY RULE*: When the customer sends any city or location name, give a warm, insightful suggestion praising that city/location, present at least 3-4 prime localities as numbered options, and confirm their choice before advancing to Question 2.\n\n"
+            "2. Planning to Buy (required)\n"
+            "   When are you planning to buy?\n"
+            "   1. Immediately\n   2. Within 1 Month\n   3. Within 3 Months\n   4. Within 6 Months\n   5. Within 12 Months\n   6. More Than 1 Year\n   7. Just Exploring / Researching\n\n"
+            "3. Budget Range (required)\n"
+            "   What is your budget range?\n"
+            "   1. Up to 25 lakh\n   2. 25 lakh - 50 lakh\n   3. 50 lakh - 1 crore\n   4. 1 crore - 2 crore\n   5. Above 2 crore\n\n"
+            "4. Payment Option (required)\n"
+            "   How do you plan to pay?\n"
+            "   1. Bank Finance with EMI\n   2. Full Cash Payment\n   3. Home Loan (Mortgage)\n   4. Down Payment Plan\n"
+            "   5. Construction-Linked Payment Plan (CLP)\n   6. Possession-Linked Payment Plan (PLP)\n"
+            "   7. Installment Payment Plan\n   8. Developer Financing\n   9. Rent-to-Own Scheme\n   10. Part Cash + Home Loan\n"
+            "   11. Part Payment with Balance at Registration\n   12. Flexible Payment Plan\n"
+            "   13. Subvention Scheme (Developer Pays Pre-EMI)\n   14. Joint Home Loan (Co-applicant Financing)\n"
+            "   15. NRI Payment Plan (for Overseas Buyers)\n\n"
+            "5. BHK Preference (required)\n"
+            "   Which configuration / BHK do you need?\n"
+            "   1. 1 RK\n   2. 1 BHK\n   3. 2 BHK\n   4. 2.5 BHK\n   5. 3 BHK\n   6. 3.5 BHK\n   7. 4 BHK\n   8. 5 BHK+\n   9. Villa\n   10. Penthouse\n\n"
+            "6. Remarks/Requirements (optional)\n"
+            "   Do you have any specific remarks or requirements (such as parking, floor preference, facing direction, hill view, or nearby schools)? Type whatever you need, or type \"skip\" if none."
         )
 
     return (
@@ -1842,68 +2006,16 @@ def _build_system_prompt(first_name: str, known_criteria: dict, is_followup: boo
         f"   - If they mention budget or payment: reassure them that Profilent has prime verified inventory and clear documentation matching their range.\n"
         f"   - If they mention custom remarks (parking, floor, schools): acknowledge and assure that these parameters will be prioritized.\n"
         f"2. GUIDED QUESTIONNAIRE: Guide the customer step-by-step through their requirements, asking ONE question at a time in this order. Show numbered options and let the customer reply with a number or text:\n\n"
-        f"1. Location Preference (required)\n"
-        f"   Ask which area/city they are interested in:\n"
-        f"   1. Haldwani (Rampur Rd, Kaladhungi Rd, Bithoria, Mukhani)\n"
-        f"   2. Nainital / Bhimtal\n"
-        f"   3. Almora\n"
-        f"   4. Other (please type the area)\n"
-        f"   *LOCATION ADVISORY RULE*: When the customer sends any city or location name (e.g. 'Haldwani', 'Nainital', 'Almora', 'Dehradun', 'Rishikesh', 'Haridwar', 'Mussoorie', 'Mukteshwar', 'Ranikhet', 'Ramnagar', or any other location):\n"
-        f"     - Give a warm, insightful suggestion praising that city/location.\n"
-        f"     - Present at least 3-4 prime residential or investment localities/areas in that city as numbered options (1-4), and ask the customer which specific area they prefer (or to type their own preferred colony/area).\n"
-        f"     - Keep 'is_complete': false, and DO NOT advance to Question 2 until they choose an area!\n"
-        f"     - Once they choose an area (e.g. replying 1, 2, 3, 4, or typing an area name), save the specific area and smoothly proceed to Question 2.\n\n"
-        f"2. Planning to Buy (required)\n"
-        f"   When are you planning to buy?\n"
-        f"   1. Immediately\n"
-        f"   2. Within 1 Month\n"
-        f"   3. Within 3 Months\n"
-        f"   4. Within 6 Months\n"
-        f"   5. Within 12 Months\n"
-        f"   6. More Than 1 Year\n"
-        f"   7. Just Exploring / Researching\n\n"
-        f"3. Budget Range (required)\n"
-        f"   What is your budget range?\n"
-        f"   1. Up to 25 lakh\n"
-        f"   2. 25 lakh - 50 lakh\n"
-        f"   3. 50 lakh - 1 crore\n"
-        f"   4. 1 crore - 2 crore\n"
-        f"   5. Above 2 crore\n\n"
-        f"4. Payment Option (required)\n"
-        f"   How do you plan to pay?\n"
-        f"   1. Bank Finance with EMI\n"
-        f"   2. Full Cash Payment\n"
-        f"   3. Home Loan (Mortgage)\n"
-        f"   4. Down Payment Plan\n"
-        f"   5. Construction-Linked Payment Plan (CLP)\n"
-        f"   6. Possession-Linked Payment Plan (PLP)\n"
-        f"   7. Installment Payment Plan\n"
-        f"   8. Developer Financing\n"
-        f"   9. Rent-to-Own Scheme\n"
-        f"   10. Part Cash + Home Loan\n"
-        f"   11. Part Payment with Balance at Registration\n"
-        f"   12. Flexible Payment Plan\n"
-        f"   13. Subvention Scheme (Developer Pays Pre-EMI)\n"
-        f"   14. Joint Home Loan (Co-applicant Financing)\n"
-        f"   15. NRI Payment Plan (for Overseas Buyers)\n\n"
-        f"5. BHK Preference (required)\n"
-        f"   Which configuration / BHK do you need?\n"
-        f"   1. 1 RK\n"
-        f"   2. 1 BHK\n"
-        f"   3. 2 BHK\n"
-        f"   4. 2.5 BHK\n"
-        f"   5. 3 BHK\n"
-        f"   6. 3.5 BHK\n"
-        f"   7. 4 BHK\n"
-        f"   8. 5 BHK+\n"
-        f"   9. Villa\n"
-        f"   10. Penthouse\n\n"
-        f"6. Remarks/Requirements (optional)\n"
-        f"   Do you have any specific remarks or requirements (such as parking, floor preference, facing direction, hill view, or nearby schools)? Type whatever you need, or type \"skip\" if none.\n\n"
+        f"{questionnaire_text}\n\n"
         f"Rules:\n"
         f"- Always provide a brief advisory suggestion/acknowledgement before asking the next question.\n"
         f"- Ask only one question per message.\n"
         f"- Required fields must be answered before you move on. If the customer skips one, politely ask again.\n"
+        f"- MULTI-SLOT & ALL-IN-ONE STATEMENTS: If the customer provides multiple preferences at once (e.g. they specify location, BHK, budget, payment mode, or amenities in one message):\n"
+        f"  1. Extract EVERY mentioned preference into 'extracted_slots' simultaneously.\n"
+        f"  2. Provide a thoughtful analysis and personalized property suggestions based on all the provided criteria combined.\n"
+        f"  3. If any required question is still missing, ask ONLY the next missing question (never re-ask for details already provided).\n"
+        f"  4. If the customer provides all required information in their message, set 'is_complete': true.\n"
         f"- Don't quote prices, availability, or loan terms. Say that a sales executive will confirm these.\n"
         f"- Keep replies concise and in the customer's language (English, Hindi, or Hinglish, based on how they write).\n"
         f"- If the customer asks to speak to a person, say that a sales executive will call them and move to the summary.\n"
@@ -1914,12 +2026,7 @@ def _build_system_prompt(first_name: str, known_criteria: dict, is_followup: boo
         f"Output MUST be a valid JSON object matching this schema:\n"
         f"{{\n"
         f'  "extracted_slots": {{\n'
-        f'    "location_preference": "...",\n'
-        f'    "planning_to_buy": "...",\n'
-        f'    "budget_range": "...",\n'
-        f'    "payment_option": "...",\n'
-        f'    "bhk_preference": "...",\n'
-        f'    "remarks_requirements": "..."\n'
+        f"{slots_schema_str}\n"
         f"  }},\n"
         f'  "reply_message": "...",\n'
         f'  "is_complete": true | false\n'
@@ -2013,10 +2120,10 @@ def call_gemini_agent(
         },
     }
 
-    models_to_try = [model_name]
-    for alt in ["gemini-3.5-flash", "gemini-3.6-flash", "gemini-flash-latest"]:
-        if alt and alt not in models_to_try:
-            models_to_try.append(alt)
+    models_to_try = _get_candidate_models(model_name)
+    if not models_to_try:
+        logger.info("All Gemini models currently marked exhausted/rate-limited; using high-speed local engine.")
+        return None
 
     for current_model in models_to_try:
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{current_model}:generateContent?key={api_key}"
@@ -2025,8 +2132,11 @@ def call_gemini_agent(
                 url,
                 headers={"Content-Type": "application/json"},
                 json=payload,
-                timeout=(3.5, 12.0),
+                timeout=(2.5, 4.5),
             )
+            if response.status_code == 429:
+                _mark_model_exhausted(current_model, 600.0)
+                continue
             if not response.ok:
                 logger.debug("Gemini model %s returned HTTP %s", current_model, response.status_code)
                 continue
@@ -2203,36 +2313,52 @@ def extract_all_slots_from_text(text: str, current_answers: dict) -> dict:
         extracted["bhk_preference"] = "Commercial Space / Shop"
 
     # 3. Budget extraction (numeric numbers, crores, lakhs, or standard ranges)
-    num_match = re.search(r"(\d+(?:\.\d+)?)\s*(lakh|lac|lacs|cr|crore|लाख|करोड़)", txt_low)
-    if num_match:
-        val = float(num_match.group(1))
-        unit = num_match.group(2)
-        if "cr" in unit or "करोड़" in unit:
-            if val >= 2.0:
-                extracted["budget_range"] = "Above 2 crore"
-            else:
-                extracted["budget_range"] = "1 crore - 2 crore"
-        else:
-            if val < 25.0:
-                extracted["budget_range"] = "Up to 25 lakh"
-            elif val <= 50.0:
-                extracted["budget_range"] = "25 lakh - 50 lakh"
-            elif val <= 100.0:
-                extracted["budget_range"] = "50 lakh - 1 crore"
-            elif val <= 200.0:
-                extracted["budget_range"] = "1 crore - 2 crore"
-            else:
-                extracted["budget_range"] = "Above 2 crore"
-    elif any(w in txt_low for w in ["above 2 crore", "over 2 crore", "2 crore+", "2 cr+"]):
+    # Check multi-number ranges first before matching single numbers
+    if any(w in txt_low for w in ["above 2 crore", "over 2 crore", "2 crore+", "2 cr+", "2cr+"]):
         extracted["budget_range"] = "Above 2 crore"
-    elif any(w in txt_low for w in ["1 crore - 2 crore", "1 to 2 crore", "1-2 cr", "1 cr", "1 crore", "2 crore", "1.5 cr", "1.5 crore"]):
+    elif any(w in txt_low for w in ["1 crore - 2 crore", "1 to 2 crore", "1-2 cr", "1-2 crore", "1 to 2 cr", "1.5 cr", "1.5 crore", "1.2 cr", "1.8 cr"]):
         extracted["budget_range"] = "1 crore - 2 crore"
-    elif any(w in txt_low for w in ["50 lakh - 1 crore", "50 to 1 crore", "50-1 cr", "50 lakh", "60 lakh", "70 lakh", "80 lakh", "90 lakh"]):
-        extracted["budget_range"] = "50 lakh - 1 crore"
-    elif any(w in txt_low for w in ["25 lakh - 50 lakh", "25 to 50", "25-50", "30 lakh", "35 lakh", "40 lakh", "45 lakh"]):
+    elif any(w in txt_low for w in ["25 lakh - 50 lakh", "25 to 50 lakh", "25-50 lakh", "25 to 50", "25-50", "25 lac - 50 lac", "25-50 lac"]):
         extracted["budget_range"] = "25 lakh - 50 lakh"
-    elif any(w in txt_low for w in ["up to 25 lakh", "under 25 lakh", "below 25 lakh", "15 lakh", "20 lakh", "25 lakh"]):
+    elif any(w in txt_low for w in [
+        "50 lakh - 1 crore", "50 to 1 crore", "50-1 cr", "50-1 crore", "50 to 1 cr", "50l - 1cr", "50l-1cr",
+        "50-100 lakh", "50 to 100 lakh", "50-100 lac"
+    ]) or re.search(r"\b50\s*(?:-|to)\s*1\s*(?:cr|crore)\b", txt_low):
+        extracted["budget_range"] = "50 lakh - 1 crore"
+    elif any(w in txt_low for w in ["up to 25 lakh", "under 25 lakh", "below 25 lakh"]):
         extracted["budget_range"] = "Up to 25 lakh"
+    # Single amounts / fallback regex
+    elif any(w in txt_low for w in ["50 lakh", "60 lakh", "70 lakh", "80 lakh", "90 lakh", "75 lakh", "65 lakh", "85 lakh", "50 lac", "60 lac", "70 lac", "80 lac"]):
+        extracted["budget_range"] = "50 lakh - 1 crore"
+    elif any(w in txt_low for w in ["30 lakh", "35 lakh", "40 lakh", "45 lakh", "25 lakh", "30 lac", "35 lac", "40 lac", "45 lac", "25 lac"]):
+        extracted["budget_range"] = "25 lakh - 50 lakh"
+    elif any(w in txt_low for w in ["15 lakh", "20 lakh", "10 lakh"]):
+        extracted["budget_range"] = "Up to 25 lakh"
+    elif any(w in txt_low for w in ["1 cr", "1 crore", "2 crore", "2 cr"]):
+        extracted["budget_range"] = "1 crore - 2 crore"
+    else:
+        num_match = re.search(r"(\d+(?:\.\d+)?)\s*(lakh|lac|lacs|cr|crore|लाख|करोड़)", txt_low)
+        if num_match:
+            val = float(num_match.group(1))
+            unit = num_match.group(2)
+            if "cr" in unit or "करोड़" in unit:
+                if val >= 2.0:
+                    extracted["budget_range"] = "Above 2 crore"
+                elif val >= 1.0:
+                    extracted["budget_range"] = "1 crore - 2 crore"
+                else:
+                    extracted["budget_range"] = "50 lakh - 1 crore"
+            else:
+                if val < 25.0:
+                    extracted["budget_range"] = "Up to 25 lakh"
+                elif val <= 50.0:
+                    extracted["budget_range"] = "25 lakh - 50 lakh"
+                elif val <= 100.0:
+                    extracted["budget_range"] = "50 lakh - 1 crore"
+                elif val <= 200.0:
+                    extracted["budget_range"] = "1 crore - 2 crore"
+                else:
+                    extracted["budget_range"] = "Above 2 crore"
 
     # 4. Timeline extraction
     if any(w in txt_low for w in ["immediately", "immediate", "urgent", "jaldi", "turant", "ready to move", "तुरंत"]):
@@ -2251,7 +2377,7 @@ def extract_all_slots_from_text(text: str, current_answers: dict) -> dict:
     # 5. Payment method extraction
     if any(w in txt_low for w in ["home loan", "mortgage", "bank finance", "bank loan", "emi", "loan", "लोन"]):
         extracted["payment_option"] = "Home Loan (Mortgage)"
-    elif any(w in txt_low for w in ["full cash", "self funded", "own funds", "direct payment", "cash", "नकद"]):
+    elif any(w in txt_low for w in ["full cash", "self funded", "own funds", "direct payment", "cash", "नकद", "payement"]):
         extracted["payment_option"] = "Full Cash Payment"
     elif any(w in txt_low for w in ["down payment", "part payment", "downpayment"]):
         extracted["payment_option"] = "Down Payment Plan"
@@ -2289,6 +2415,166 @@ def extract_all_slots_from_text(text: str, current_answers: dict) -> dict:
         extracted["remarks_requirements"] = ", ".join(special_aspects)
 
     return extracted
+
+
+def generate_multi_slot_analysis_and_suggestions(answers: dict, new_slots: dict, lang: str = "en") -> str:
+    """Generate comprehensive acknowledgement, market analysis, and property suggestions
+    when customer provides multiple criteria at once."""
+    loc = answers.get("location_preference") or answers.get("location_city", "").title() or "Haldwani"
+    bhk = answers.get("bhk_preference") or ""
+    budget = answers.get("budget_range") or ""
+    payment = answers.get("payment_option") or ""
+    timeline = answers.get("planning_to_buy") or ""
+    remarks = answers.get("remarks_requirements") or ""
+
+    if lang == "hi":
+        bullets = []
+        if loc: bullets.append(f"• पसंदीदा क्षेत्र: {loc}")
+        if bhk: bullets.append(f"• प्रॉपर्टी कॉन्फ़िगरेशन: {bhk}")
+        if budget: bullets.append(f"• बजट रेंज: {budget}")
+        if payment: bullets.append(f"• भुगतान विकल्प: {payment}")
+        if timeline: bullets.append(f"• समयसीमा: {timeline}")
+        if remarks and remarks.lower() not in {"none", "skip"}: bullets.append(f"• विशेष आवश्यकता: {remarks}")
+        summary_block = "शानदार चयन! हमने आपकी आवश्यकताएं नोट कर ली हैं:\n" + "\n".join(bullets)
+    elif lang == "hinglish":
+        bullets = []
+        if loc: bullets.append(f"• Location: {loc}")
+        if bhk: bullets.append(f"• Configuration: {bhk}")
+        if budget: bullets.append(f"• Budget: {budget}")
+        if payment: bullets.append(f"• Payment: {payment}")
+        if timeline: bullets.append(f"• Timeline: {timeline}")
+        if remarks and remarks.lower() not in {"none", "skip"}: bullets.append(f"• Special Requirement: {remarks}")
+        summary_block = "Great choices! Humne aapki requirements note kar li hain:\n" + "\n".join(bullets)
+    else:
+        bullets = []
+        if loc: bullets.append(f"• Location: {loc}")
+        if bhk: bullets.append(f"• Configuration: {bhk}")
+        if budget: bullets.append(f"• Budget: {budget}")
+        if payment: bullets.append(f"• Payment Option: {payment}")
+        if timeline: bullets.append(f"• Buying Timeline: {timeline}")
+        if remarks and remarks.lower() not in {"none", "skip"}: bullets.append(f"• Special Requirement: {remarks}")
+        summary_block = "Excellent choices! I have noted your preferences:\n" + "\n".join(bullets)
+
+    insights = []
+    loc_l = loc.lower()
+    bhk_desc = bhk if bhk else "residential"
+
+    if "haldwani" in loc_l:
+        if lang == "hi":
+            insights.append("हल्द्वानी में रामपुर रोड, कालाढूंगी रोड और मुखानी जैसे प्रमुख क्षेत्रों में आपके बजट और कॉन्फ़िगरेशन के अनुसार बेहतरीन गेटेड सोसाइटीज और बिल्डर फ्लोर्स उपलब्ध हैं।")
+        elif lang == "hinglish":
+            insights.append("Haldwani mein Rampur Road, Kaladhungi Road aur Mukhani jaise high-growth areas mein aapke budget aur configuration ke hisaab se premium gated societies aur builder floors available hain.")
+        else:
+            insights.append("In Haldwani, high-demand residential corridors like Rampur Road, Kaladhungi Road, and Mukhani offer verified gated societies and builder floors matching this profile.")
+    elif any(w in loc_l for w in ["nainital", "bhimtal", "bhowali"]):
+        if lang == "hi":
+            insights.append("भीमताल व नैनीताल में झील और खूबसूरत वादियों के नज़दीक संपत्तियां छुट्टियां बिताने और हॉलिडे होम रेंटल के लिए सर्वोत्तम हैं।")
+        elif lang == "hinglish":
+            insights.append("Bhimtal aur Nainital mein lake-view aur scenic mountain-facing properties vacation living aur high-return rentals ke liye perfect hain.")
+        else:
+            insights.append("In the Bhimtal & Nainital region, properties with peaceful valley or lake views are in prime demand for serene living and holiday rentals.")
+    elif "almora" in loc_l:
+        if lang == "hi":
+            insights.append("अल्मोड़ा में हिमालयी दृश्यों वाली संपत्तियां शांतिपूर्ण जीवन और दीर्घकालिक निवेश के लिए बहुत उपयुक्त हैं।")
+        else:
+            insights.append("Almora offers tranquil mountain-view retreat properties and peaceful living with great long-term appreciation.")
+
+    if budget:
+        if "50 lakh" in budget.lower() or "1 crore" in budget.lower():
+            if lang == "hi":
+                insights.append(f"{budget} के बजट में उत्तम सड़क कनेक्टिविटी, सुरक्षा और आवश्यक सुविधाओं वाली {bhk_desc} प्रॉपर्टीज तुरंत उपलब्ध हैं।")
+            elif lang == "hinglish":
+                insights.append(f"{budget} budget bracket mein prime road connectivity aur gated security wali {bhk_desc} properties best value deti hain.")
+            else:
+                insights.append(f"Within the {budget} range, {bhk_desc} options with prime road connectivity and clear title documentation are readily available.")
+        elif "above 2 crore" in budget.lower():
+            if lang == "hi":
+                insights.append(f"{budget} के प्रीमियम बजट में निजी लॉन, खूबसूरत दृश्यों वाली लक्जरी इंडिपेंडेंट विला सबसे उत्तम विकल्प हैं।")
+            else:
+                insights.append(f"For your premium budget of {budget}, luxury independent villas and expansive foothill estates are ideal choices.")
+
+    if payment:
+        if "cash" in payment.lower():
+            if lang == "hi":
+                insights.append("पूरा नकद भुगतान होने से आपको तुरंत पजेशन, त्वरित रजिस्ट्री और डेवलपर्स से विशेष मूल्य लाभ मिलता है।")
+            elif lang == "hinglish":
+                insights.append("Full cash payment readiness aapko immediate possession, fast-track registration aur builder negotiations mein strong advantage deti hai.")
+            else:
+                insights.append("Your full cash readiness provides a strong advantage for immediate possession and negotiated builder pricing.")
+        elif "loan" in payment.lower():
+            if lang == "hi":
+                insights.append("हम अग्रणी बैंकों (SBI, HDFC, ICICI) के साथ आसान लोन स्वीकृति और सरल दस्तावेज़ीकरण में पूरी सहायता करते हैं।")
+            else:
+                insights.append("We partner with leading banks to ensure smooth home loan approvals and hassle-free documentation.")
+
+    if remarks and remarks.lower() not in {"none", "skip"}:
+        if lang == "hi":
+            insights.append(f"आपकी आवश्यकता ({remarks}) को हम शॉर्टलिस्ट की जाने वाली सभी प्रॉपर्टीज में प्राथमिकता देंगे।")
+        elif lang == "hinglish":
+            insights.append(f"Aapki specific requirement ({remarks}) ko humari team top priority pe shortlist karegi.")
+        else:
+            insights.append(f"We have specifically noted your preference for {remarks} and will ensure it is prioritized.")
+
+    header = "💡 प्रॉपर्टी सुझाव व बाज़ार विश्लेषण:" if lang == "hi" else ("💡 Property Suggestions & Market Insights:" if lang == "en" else "💡 Property Suggestions & Market Insights:")
+    advice_block = f"{header}\n" + " ".join(insights)
+    return f"{summary_block}\n\n{advice_block}"
+
+
+def generate_completion_lead_analysis(answers: dict, lang: str = "en") -> str:
+    """Generate final comprehensive real estate analysis and recommendations before presenting
+    the booking summary card and Calendly consultation links."""
+    loc = answers.get("location_preference") or answers.get("location_city", "").title() or "Uttarakhand"
+    bhk = answers.get("bhk_preference") or "property"
+    budget = answers.get("budget_range") or ""
+    payment = answers.get("payment_option") or ""
+    timeline = answers.get("planning_to_buy") or ""
+    remarks = answers.get("remarks_requirements") or ""
+
+    insights = []
+    loc_l = loc.lower()
+
+    if "haldwani" in loc_l:
+        if lang == "hi":
+            insights.append(f"• हल्द्वानी के रामपुर रोड और कालाढूंगी रोड पर {budget} के बजट में {bhk} के गेटेड सोसाइटी और प्रीमियम फ्लोर्स उपलब्ध हैं।")
+        elif lang == "hinglish":
+            insights.append(f"• Haldwani mein Rampur Road aur Kaladhungi Road corridors pe {budget} budget ke mutabiq {bhk} verified options best suit karte hain.")
+        else:
+            insights.append(f"• In Haldwani, prime corridors along Rampur Road and Kaladhungi Road feature verified {bhk} societies matching your {budget} budget.")
+    elif any(w in loc_l for w in ["nainital", "bhimtal", "bhowali"]):
+        if lang == "hi":
+            insights.append(f"• नैनीताल व भीमताल क्षेत्र में {budget} के बजट में शांत पहाड़ी और झील के नज़ारे वाली संपत्तियां छुट्टियां बिताने और रेंटल यील्ड के लिए उत्तम हैं।")
+        else:
+            insights.append(f"• In Bhimtal & Nainital, scenic valley and lake-facing {bhk} properties in the {budget} range offer premier living and holiday rental returns.")
+    elif "almora" in loc_l:
+        if lang == "hi":
+            insights.append(f"• अल्मोड़ा में शांत पहाड़ी वातावरण और 180-डिग्री हिमालयी दृश्यों वाली संपत्तियां आपकी आवश्यकता के लिए सर्वोपरि हैं।")
+        else:
+            insights.append(f"• In Almora, tranquil mountain-view retreat properties offer peaceful living with high appreciation potential.")
+    else:
+        insights.append(f"• Verified {bhk} options in {loc} matching your {budget} range are being prioritized by our specialist team.")
+
+    if payment:
+        if "cash" in payment.lower():
+            if lang == "hi":
+                insights.append("• नकद भुगतान और आपकी समयसीमा के अनुसार, आपको रेडी-टू-मूव प्रॉपर्टीज पर तत्काल पजेशन और रजिस्ट्री का विशेष लाभ मिलेगा।")
+            elif lang == "hinglish":
+                insights.append("• Full cash readiness aur aapke timeline ke sath, immediate possession aur developer discounts par priority deal milegi.")
+            else:
+                insights.append("• Your full cash readiness and timeline provide direct leverage for immediate possession and negotiated developer pricing.")
+        elif "loan" in payment.lower():
+            if lang == "hi":
+                insights.append("• बैंक लोन के लिए सभी स्वीकृत और स्पष्ट टाइटल वाली प्रॉपर्टीज को प्राथमिकता दी जाएगी।")
+            else:
+                insights.append("• Clear-title projects with pre-approved bank loans will be prioritized for smooth, hassle-free financing.")
+
+    if remarks and remarks.lower() not in {"none", "skip"}:
+        if lang == "hi":
+            insights.append(f"• आपकी विशेष आवश्यकता ({remarks}) का पूरा ध्यान रखा जाएगा।")
+        else:
+            insights.append(f"• Dedicated attention will be given to your requirement for {remarks}.")
+
+    header = "🌟 प्रोफिलेंट प्रॉपर्टी विश्लेषण व सुझाव (Market Insights):" if lang == "hi" else ("🌟 Profilent Property Analysis & Recommendations:" if lang == "en" else "🌟 Profilent Property Analysis & Recommendations:")
+    return f"{header}\n" + "\n".join(insights)
 
 
 def analyze_user_query_and_intent(msg: str, answers: dict, lang: str = "en") -> str | None:
@@ -2481,8 +2767,21 @@ def _sanitize_and_validate_turn(
         return answers, f"{reassurance}{get_question_prompt(next_slot, lang=lang)}", False
 
     last_answered_slot = None
+    active_questions = get_active_questions_sync()
+    all_active_keys = [q["slot_key"] for q in active_questions if q.get("slot_key")]
+    slots_before = {k: answers.get(k) for k in all_active_keys if answers.get(k)}
 
-    # 2. Extract all property slots directly from free-form user message
+    # Determine which question was expecting an answer before this user message
+    expected_slot = None
+    expected_q = None
+    for q in active_questions:
+        sk = q.get("slot_key")
+        if sk and not answers.get(sk):
+            expected_slot = sk
+            expected_q = q
+            break
+
+    # 2. Extract standard property slots directly from free-form user message
     freeform_slots = extract_all_slots_from_text(user_message, answers)
     for k, v in freeform_slots.items():
         if v and not answers.get(k):
@@ -2518,36 +2817,44 @@ def _sanitize_and_validate_turn(
             if not last_answered_slot:
                 last_answered_slot = key
 
-    # 5. Determine which slot is still pending
-    pending_slot = None
-    for s in ORDERED_REQUIRED_SLOTS:
-        if not answers.get(s):
-            pending_slot = s
-            break
-    if not pending_slot and not answers.get("remarks_requirements"):
-        pending_slot = "remarks_requirements"
+    # 5. Handle user response for the expected question slot (standard or custom admin question)
+    if expected_slot and not answers.get(expected_slot):
+        # 5a. Numbered menu choice (1, 2, 3...)
+        choice = _resolve_numbered_choice(user_message, expected_slot)
+        if choice:
+            answers[expected_slot] = choice
+            last_answered_slot = expected_slot
+        else:
+            # 5b. Match option text from the question's predefined options
+            q_opts = (expected_q.get("options") or []) if expected_q else []
+            matched_opt = None
+            if q_opts:
+                msg_clean = user_message.strip().lower()
+                for opt in q_opts:
+                    opt_str = str(opt).strip()
+                    if msg_clean == opt_str.lower() or opt_str.lower() in msg_clean:
+                        matched_opt = opt_str
+                        break
+            if matched_opt:
+                answers[expected_slot] = matched_opt
+                last_answered_slot = expected_slot
+            else:
+                # 5c. Free-form text reply (custom feedback, remarks, or any text answer)
+                raw_msg = user_message.strip()
+                if raw_msg.lower() in {"skip", "chhod do", "aage badho", "no", "none", "nahi"}:
+                    answers[expected_slot] = answers.get("form_requirement") or "None"
+                    last_answered_slot = expected_slot
+                elif raw_msg:
+                    answers[expected_slot] = raw_msg
+                    last_answered_slot = expected_slot
 
-    # Handle numeric menu choice for pending slot if user typed a number like 1-15
-    if pending_slot and pending_slot != "location_preference":
-        choice = _resolve_numbered_choice(user_message, pending_slot)
-        if choice and not answers.get(pending_slot):
-            answers[pending_slot] = choice
-            last_answered_slot = pending_slot
+    slots_after = {k: answers.get(k) for k in all_active_keys if answers.get(k)}
+    newly_provided_slots = {k: v for k, v in slots_after.items() if k not in slots_before}
 
-    # 6. Remarks handling when core fields are complete
-    core_5_answered = all(answers.get(s) for s in ORDERED_REQUIRED_SLOTS)
-    if core_5_answered and not answers.get("remarks_requirements"):
-        raw_msg = user_message.strip()
-        if raw_msg.lower() in {"skip", "chhod do", "aage badho", "no", "none", "nahi"}:
-            answers["remarks_requirements"] = answers.get("form_requirement") or "None"
-        elif len(raw_msg.split()) >= 1 and raw_msg.lower() not in {"ok", "done", "yes"}:
-            answers["remarks_requirements"] = raw_msg
-            last_answered_slot = "remarks_requirements"
-
-    # 7. Check if user asked a consultative question or query (Schools, Prices, Comparisons, Loans, etc.)
+    # 6. Check if user asked a consultative question or query (Schools, Prices, Comparisons, Loans, etc.)
     consultative_ans = analyze_user_query_and_intent(user_message, answers, lang=lang)
 
-    # 8. Check if LLM produced an intelligent, non-generic reply
+    # 7. Check if LLM produced an intelligent, non-generic reply
     is_good_llm_reply = bool(
         is_real_llm_reply
         and llm_reply
@@ -2556,50 +2863,40 @@ def _sanitize_and_validate_turn(
         and not any(err in llm_reply.lower() for err in ["error", "exception", "failed"])
     )
 
-    # 9. Locality area refinement check
+    # 8. Locality area refinement check
     area_prompt = None
     if answers.get("location_city") and not answers.get("location_area"):
         loc_data = get_locality_data_or_ai_suggestions(answers["location_city"], lang=lang)
         if loc_data and loc_data.get("question"):
             area_prompt = loc_data["question"].get(lang, loc_data["question"]["en"])
 
-    # 10. Check remaining missing required slots
-    missing_required = [s for s in ORDERED_REQUIRED_SLOTS if not answers.get(s)]
+    # 9. Find remaining unanswered questions
+    remaining_unanswered = [q["slot_key"] for q in active_questions if q.get("slot_key") and not answers.get(q["slot_key"])]
 
-    # If all 6 criteria are now answered -> Finish!
-    if not missing_required and answers.get("remarks_requirements"):
-        return answers, "", True
+    # If all criteria are now answered -> Finish!
+    if not remaining_unanswered:
+        ack = _generate_assistant_acknowledgement(last_answered_slot, answers.get(last_answered_slot, ""), lang=lang) if last_answered_slot else ""
+        return answers, ack, True
 
     # If locality area is pending:
-    if area_prompt and "location_preference" not in missing_required:
+    if area_prompt and "location_preference" not in remaining_unanswered:
         advisory = consultative_ans or (_generate_assistant_acknowledgement(last_answered_slot, answers.get(last_answered_slot, ""), lang=lang) if last_answered_slot else "")
         reply_to_send = f"{advisory}\n\n{area_prompt}" if advisory else area_prompt
         return answers, reply_to_send, False
 
-    # If there are missing required questions:
-    if missing_required:
-        next_slot = missing_required[0]
-        q_prompt = get_question_prompt(next_slot, lang=lang)
-        if consultative_ans:
-            return answers, f"{consultative_ans}\n\n{q_prompt}", False
-        if is_good_llm_reply and any(opt_indicator in llm_reply for opt_indicator in ["1.", "1️⃣", "•", "?", "which", "what", "budget", "area"]):
-            return answers, llm_reply, False
+    # Prompt the next unanswered question in order
+    next_slot = remaining_unanswered[0]
+    q_prompt = get_question_prompt(next_slot, lang=lang)
+    if consultative_ans:
+        return answers, f"{consultative_ans}\n\n{q_prompt}", False
+    if is_good_llm_reply and any(opt_indicator in llm_reply for opt_indicator in ["1.", "1️⃣", "•", "?", "which", "what", "budget", "area"]):
+        return answers, llm_reply, False
+    if len(newly_provided_slots) >= 2:
+        advisory = generate_multi_slot_analysis_and_suggestions(answers, newly_provided_slots, lang=lang)
+    else:
         advisory = _generate_assistant_acknowledgement(last_answered_slot, answers.get(last_answered_slot, ""), lang=lang) if last_answered_slot else ""
-        reply_to_send = f"{advisory}\n\n{q_prompt}" if advisory else q_prompt
-        return answers, reply_to_send, False
-
-    # Only remarks remaining:
-    if not answers.get("remarks_requirements"):
-        q_prompt = get_question_prompt("remarks_requirements", lang=lang)
-        if consultative_ans:
-            return answers, f"{consultative_ans}\n\n{q_prompt}", False
-        if is_good_llm_reply:
-            return answers, llm_reply, False
-        advisory = _generate_assistant_acknowledgement(last_answered_slot, answers.get(last_answered_slot, ""), lang=lang) if last_answered_slot else ""
-        reply_to_send = f"{advisory}\n\n{q_prompt}" if advisory else q_prompt
-        return answers, reply_to_send, False
-
-    return answers, "", True
+    reply_to_send = f"{advisory}\n\n{q_prompt}" if advisory else q_prompt
+    return answers, reply_to_send, False
 
 
 def execute_hybrid_ai_turn(
@@ -2825,20 +3122,11 @@ def execute_hybrid_ai_turn(
         is_real_llm_reply=bool(ai_result),
     )
 
-    all_core_slots_filled = all(
-        bool(answers.get(k))
-        for k in ORDERED_REQUIRED_SLOTS
-    )
-    has_all_6_slots = all_core_slots_filled and bool(answers.get("remarks_requirements"))
-    just_provided_remarks = not had_remarks_before and bool(answers.get("remarks_requirements"))
+    all_active_slots = [q["slot_key"] for q in get_active_questions_sync() if q.get("slot_key")]
+    has_all_slots = all(bool(answers.get(s)) for s in all_active_slots)
     is_turn_completing = bool(
         not was_already_complete
-        and all_core_slots_filled
-        and (
-            is_complete
-            or (just_provided_remarks and all_core_slots_filled)
-            or (has_all_6_slots and not had_remarks_before)
-        )
+        and (is_complete or has_all_slots)
     )
 
     consultative_ans = analyze_user_query_and_intent(user_message, answers, lang=lang)
@@ -2852,6 +3140,7 @@ def execute_hybrid_ai_turn(
     if is_turn_completing:
         first_name = answers.get("first_name") or "there"
         spoke_person = bool(_SPEAK_TO_HUMAN_PATTERN.search(user_message))
+        analysis_suggestions = generate_completion_lead_analysis(answers, lang=answers.get("language", lang))
         summary_msg = format_completion_summary_message(
             {**answers, "phone": phone, "mobile_number": answers.get("mobile_number") or phone},
             first_name=first_name,
@@ -2859,10 +3148,15 @@ def execute_hybrid_ai_turn(
             spoke_to_person=spoke_person,
             lang=answers.get("language", lang),
         )
+        parts = []
+        if reply_to_send and reply_to_send.strip():
+            parts.append(reply_to_send.strip())
         if consultative_ans:
-            reply_to_send = f"{consultative_ans}\n\n{summary_msg}"
-        else:
-            reply_to_send = summary_msg
+            parts.append(consultative_ans)
+        if analysis_suggestions:
+            parts.append(analysis_suggestions)
+        parts.append(summary_msg)
+        reply_to_send = "\n\n".join(parts)
         is_complete = True
     elif was_already_complete:
         if consultative_ans:
@@ -2975,10 +3269,7 @@ def analyze_lead_with_ai(lead_data: dict, recent_messages: list | None = None) -
     # 1. Try Gemini
     gemini_key, gemini_model = _get_gemini_config()
     if gemini_key:
-        models_to_try = [gemini_model]
-        for alt in ["gemini-flash-lite-latest", "gemini-3.5-flash-lite", "gemini-flash-latest"]:
-            if alt and alt not in models_to_try:
-                models_to_try.append(alt)
+        models_to_try = _get_candidate_models(gemini_model)
 
         payload = {
             "systemInstruction": {"parts": [{"text": system_prompt}]},
@@ -2993,7 +3284,10 @@ def analyze_lead_with_ai(lead_data: dict, recent_messages: list | None = None) -
         for current_model in models_to_try:
             try:
                 url = f"https://generativelanguage.googleapis.com/v1beta/models/{current_model}:generateContent?key={gemini_key}"
-                resp = _ai_session.post(url, headers={"Content-Type": "application/json"}, json=payload, timeout=(3.5, 12.0))
+                resp = _ai_session.post(url, headers={"Content-Type": "application/json"}, json=payload, timeout=(2.5, 4.5))
+                if resp.status_code == 429:
+                    _mark_model_exhausted(current_model, 600.0)
+                    continue
                 if not resp.ok:
                     continue
                 body = resp.json()
