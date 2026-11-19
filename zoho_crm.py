@@ -12,6 +12,7 @@ Optimizations:
 - Safe, non-blocking background execution for FastAPI/Starlette
 """
 
+import json
 import logging
 import os
 import re
@@ -49,6 +50,7 @@ _token_lock = threading.Lock()
 _access_token = ""
 _token_expires_at = 0.0
 _api_domain = os.getenv("ZOHO_API_DOMAIN", "https://www.zohoapis.in").rstrip("/")
+_TOKEN_CACHE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".zoho_token_cache.json")
 
 _zoho_rate_limit_cooldown_until = 0.0
 
@@ -108,10 +110,15 @@ def _invalidate_token() -> None:
     with _token_lock:
         _access_token = ""
         _token_expires_at = 0.0
+        try:
+            if os.path.exists(_TOKEN_CACHE_FILE):
+                os.remove(_TOKEN_CACHE_FILE)
+        except Exception:
+            pass
 
 
 def _get_access_token(force_refresh: bool = False) -> str:
-    """Return access token with thread-safe double-checked caching."""
+    """Return access token with thread-safe double-checked caching and persistent disk fallback."""
     global _access_token, _token_expires_at, _api_domain
     config = _get_config()
 
@@ -119,13 +126,29 @@ def _get_access_token(force_refresh: bool = False) -> str:
         raise RuntimeError("Zoho CRM OAuth is not configured")
 
     now = time.monotonic()
+    now_wall = time.time()
     if not force_refresh and _access_token and now < (_token_expires_at - 60):
         return _access_token
 
     with _token_lock:
         now = time.monotonic()
+        now_wall = time.time()
         if not force_refresh and _access_token and now < (_token_expires_at - 60):
             return _access_token
+
+        # Check persistent disk cache before invoking OAuth endpoint
+        if not force_refresh and os.path.exists(_TOKEN_CACHE_FILE):
+            try:
+                with open(_TOKEN_CACHE_FILE, "r", encoding="utf-8") as f:
+                    cached = json.load(f)
+                if cached.get("token") and now_wall < cached.get("expires_at", 0) - 60:
+                    _access_token = cached["token"]
+                    _token_expires_at = time.monotonic() + max(30.0, cached["expires_at"] - now_wall)
+                    if cached.get("api_domain"):
+                        _api_domain = cached["api_domain"]
+                    return _access_token
+            except Exception:
+                pass
 
         response = _session.post(
             f"{config['accounts_url']}/oauth/v2/token",
@@ -145,6 +168,22 @@ def _get_access_token(force_refresh: bool = False) -> str:
             raise RuntimeError(
                 f"Zoho OAuth returned an unreadable response (HTTP {response.status_code}): {snippet}"
             ) from exc
+
+        # If temporarily throttled (HTTP 400 Access Denied), try reusing disk-cached token if present
+        if response.status_code == 400 and ("Access Denied" in response.text or "too many requests" in response.text):
+            if os.path.exists(_TOKEN_CACHE_FILE):
+                try:
+                    with open(_TOKEN_CACHE_FILE, "r", encoding="utf-8") as f:
+                        cached = json.load(f)
+                    if cached.get("token"):
+                        logger.warning("Zoho OAuth rate-limited; reusing recent token from disk cache.")
+                        _access_token = cached["token"]
+                        _token_expires_at = time.monotonic() + 300.0
+                        if cached.get("api_domain"):
+                            _api_domain = cached["api_domain"]
+                        return _access_token
+                except Exception:
+                    pass
 
         token = body.get("access_token")
         if not token:
@@ -174,7 +213,20 @@ def _get_access_token(force_refresh: bool = False) -> str:
 
         _api_domain = candidate_domain
         _access_token = token
-        _token_expires_at = time.monotonic() + int(body.get("expires_in", 3600))
+        expires_sec = int(body.get("expires_in", 3600))
+        _token_expires_at = time.monotonic() + expires_sec
+
+        # Persist to disk cache
+        try:
+            with open(_TOKEN_CACHE_FILE, "w", encoding="utf-8") as f:
+                json.dump({
+                    "token": token,
+                    "expires_at": time.time() + expires_sec,
+                    "api_domain": candidate_domain
+                }, f)
+        except Exception:
+            pass
+
         return _access_token
 
 
@@ -597,6 +649,83 @@ def _update_mongo_lead_status(
         logger.warning("Could not persist Zoho sync status to MongoDB: %s", exc)
 
 
+def _sync_zoho_account(lead: dict, session: requests.Session, api_domain: str, token: str) -> None:
+    """Sync a corresponding record into Zoho CRM Accounts module so leads appear in Accounts as well as Leads.
+    Populates:
+    - Account Name with Lead Source: e.g. "Raghvendra Kachhwaha (WhatsApp - Hot Lead)"
+    - Phone: formatted mobile number
+    - Website: customer email (formatted for Zoho URL validator: username.at.domain.com)
+    - Email: raw customer email
+    - Account_Site: Lead Source (e.g. "WhatsApp", "Property Form", "Contact Us", "Calendly")
+    - Account_Type: Lead Type
+    - Lead_Source: Lead Source
+    - Description: Detailed summary including source, email, and property interest
+    """
+    full_name = lead.get("full_name") or f"{lead.get('first_name', '')} {lead.get('last_name', '')}".strip() or "Hot Lead"
+    phone = _clean_phone(lead.get("mobile_number") or lead.get("contact_number") or lead.get("phone") or "")
+    email = str(lead.get("email") or "").strip()
+
+    # Determine exact source where the lead comes from
+    raw_source = str(lead.get("source") or "").lower()
+    sources_list = [str(s).lower() for s in lead.get("sources", [])]
+    wa_answers = lead.get("whatsapp_answers") or {}
+    has_wa = (
+        lead.get("Lead_Source") == "WhatsApp"
+        or "whatsapp" in raw_source
+        or any("whatsapp" in s for s in sources_list)
+        or bool(wa_answers or lead.get("whatsapp_answers") or lead.get("whatsapp_conversation_id"))
+        or any(r.get("entity") == "conversation" for r in lead.get("records", []) if isinstance(r, dict))
+    )
+    if has_wa:
+        source_name = "WhatsApp"
+    elif any("calendly" in s for s in sources_list) or "calendly" in raw_source or lead.get("calendly_event_name"):
+        source_name = "Calendly Booking"
+    elif any("property" in s or "enquiry" in s for s in sources_list) or "property" in raw_source or "enquiry" in raw_source:
+        source_name = "Property Form"
+    elif any("contact" in s for s in sources_list) or "contact" in raw_source:
+        source_name = "Contact Us"
+    else:
+        source_name = str(lead.get("Lead_Source") or lead.get("source") or "Website Enquiry").strip()
+
+    acc_name = f"{full_name} ({source_name} - Hot Lead)"
+
+    acc_record = {
+        "Account_Name": acc_name,
+        "Phone": str(phone)[:30],
+        "Description": f"Lead Source: {source_name} | Customer Email: {email} | Verified Hot Lead synced from Profilent CRM",
+        "Account_Site": source_name[:100],
+        "Account_Type": f"{source_name} Lead"[:100],
+        "Lead_Source": source_name[:100],
+    }
+
+    if email:
+        acc_record["Email"] = email
+        # Provide customer email in Website section (formatted to conform with Zoho URL validator)
+        website_val = email.replace("@", ".at.") if "@" in email else email
+        acc_record["Website"] = website_val
+
+    payload = {
+        "data": [acc_record],
+        "duplicate_check_fields": ["Account_Name"],
+    }
+    try:
+        resp = session.post(
+            f"{api_domain}/crm/v8/Accounts/upsert",
+            headers={"Authorization": f"Zoho-oauthtoken {token}"},
+            json=payload,
+            timeout=10,
+        )
+        if not resp.ok:
+            session.post(
+                f"{api_domain}/crm/v8/Accounts",
+                headers={"Authorization": f"Zoho-oauthtoken {token}"},
+                json={"data": [acc_record]},
+                timeout=10,
+            )
+    except Exception as ex:
+        logger.debug("Zoho Accounts sync notice: %s", ex)
+
+
 def sync_zoho_lead(
     lead: dict,
     retry_on_auth_fail: bool = True,
@@ -791,6 +920,7 @@ def sync_zoho_lead(
 
         if email:
             record["Email"] = email
+            record["Website"] = email.replace("@", ".at.") if "@" in email else email
         if phone:
             record["Phone"] = phone
             record["Mobile"] = phone
@@ -906,6 +1036,13 @@ def sync_zoho_lead(
             score=quality["score"],
             rating=quality["rating"],
         )
+
+        # Also ensure account is synchronized in Zoho CRM Accounts module
+        try:
+            _sync_zoho_account(lead, _session, _api_domain, access_token)
+        except Exception:
+            pass
+
         return record_id
 
     except Exception as exc:
@@ -1399,6 +1536,46 @@ def delete_zoho_lead(
             clear_zoho_id=True,
         )
     return False
+
+
+def sync_all_accounts_to_zoho() -> dict:
+    """Synchronize all qualified leads to Zoho CRM Accounts module with Lead Source and Website (Email)."""
+    db = _get_mongo_db()
+    if db is None:
+        return {"error": "MongoDB connection not available"}
+
+    token = _get_access_token()
+    upsert_col = os.getenv("UPSERT_COLLECTION_NAME", "upserted_leads")
+    enquiry_col = os.getenv("ENQUIRY_COLLECTION_NAME", "property_leads")
+
+    updated = 0
+    # 1. upserted_leads
+    for u in db[upsert_col].find():
+        lead_data = {
+            **u,
+            "local_id": u.get("id"),
+            "mobile_number": u.get("phone"),
+            "source": f"Upserted Lead ({', '.join(u.get('sources', ['Unified']))})",
+        }
+        quality = evaluate_lead_quality(lead_data)
+        if quality["is_valid"] and quality["is_hot"]:
+            _sync_zoho_account(lead_data, _session, _api_domain, token)
+            updated += 1
+
+    # 2. property_leads
+    for pl in db[enquiry_col].find():
+        lead_data = {
+            **pl,
+            "local_id": str(pl.get("_id", "")),
+            "source": pl.get("source") or "Property Form",
+        }
+        quality = evaluate_lead_quality(lead_data)
+        if quality["is_valid"] and quality["is_hot"]:
+            _sync_zoho_account(lead_data, _session, _api_domain, token)
+            updated += 1
+
+    return {"status": "success", "synced_accounts_count": updated}
+
 
 
 

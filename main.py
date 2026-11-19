@@ -4052,9 +4052,17 @@ async def admin_clear_all_caches(clear_conversations: bool = False):
     }
 
 
-app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
-app.mount("/image", StaticFiles(directory=BASE_DIR / "image"), name="image")
-app.mount("/images", StaticFiles(directory=BASE_DIR / "image"), name="images")
+class CachedStaticFiles(StaticFiles):
+    """StaticFiles with HTTP cache headers for faster asset delivery."""
+    async def get_response(self, path: str, scope):
+        response = await super().get_response(path, scope)
+        if response.status_code == 200:
+            response.headers["Cache-Control"] = "public, max-age=86400, stale-while-revalidate=3600"
+        return response
+
+app.mount("/static", CachedStaticFiles(directory=BASE_DIR / "static"), name="static")
+app.mount("/image", CachedStaticFiles(directory=BASE_DIR / "image"), name="image")
+app.mount("/images", CachedStaticFiles(directory=BASE_DIR / "image"), name="images")
 
 
 @app.get("/", include_in_schema=False)

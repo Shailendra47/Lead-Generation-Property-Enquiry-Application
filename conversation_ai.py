@@ -11,6 +11,7 @@ Features:
   salesperson notifications, and Calendly appointment booking.
 """
 
+import difflib
 import json
 import logging
 import os
@@ -1738,9 +1739,172 @@ def _generate_assistant_acknowledgement(slot: str, value: str, lang: str = "en")
     return ""
 
 
+def detect_and_correct_typos(
+    slot_key: str,
+    raw_text: str,
+    options: list[str] | None = None,
+    lang: str = "en",
+) -> dict:
+    """Analyzes user text for common typos, misspellings, or phonetic variations across
+    property questionnaire fields (BHK, location, timeline, payment, budget).
+    
+    Returns:
+    {
+        "canonical": str,            # The clean canonical value ("3 BHK", "Haldwani", "Immediately", etc.)
+        "is_typo": bool,             # True if a typo/misspelling was identified and corrected
+        "original_typo": str | None, # The exact misspelled token found ("3 bhak", "haldwni", etc.)
+        "suggestion_msg": str | None # Friendly AI feedback acknowledging the typo and suggesting canonical term
+    }
+    """
+    raw_s = (raw_text or "").strip()
+    raw_l = raw_s.lower()
+    if not raw_s:
+        return {"canonical": "", "is_typo": False, "original_typo": None, "suggestion_msg": None}
+
+    # 1. BHK Preference
+    if slot_key == "bhk_preference" or not slot_key:
+        m_bhk = re.search(r'\b(1|2|2\.5|3|3\.5|4|5)\s*(?:bhak|bkh|bak|bk|bhck|bka|bhaak|bhk\+?)\b', raw_l)
+        if m_bhk:
+            num = m_bhk.group(1)
+            orig = m_bhk.group(0)
+            canonical = "5 BHK+" if (num == "5" and ("+" in raw_l or "+" in orig)) else f"{num} BHK"
+            is_misspelled = not bool(re.search(r'\b' + re.escape(num) + r'\s*bhk\+?\b', raw_l))
+            if is_misspelled:
+                msg = {
+                    "hi": f"मैंने देखा कि टाइपिंग में '{orig}' हुआ है — मैंने आपके लिए **{canonical}** (3 Bedroom, Hall & Kitchen) दर्ज कर लिया है! 🏢",
+                    "hinglish": f"Maine notice kiya aapne '{orig}' likha hai — maine aapke liye **{canonical}** (3 Bedroom, Hall & Kitchen) note kar liya hai! 🏢",
+                    "en": f"I noticed a slight typo in '{orig}' — I assume you mean **{canonical}** (3 Bedroom, Hall & Kitchen)! 🏢",
+                }.get(lang, f"I noticed a slight typo in '{orig}' — I assume you mean **{canonical}**! 🏢")
+                return {"canonical": canonical, "is_typo": True, "original_typo": orig, "suggestion_msg": msg}
+            return {"canonical": canonical, "is_typo": False, "original_typo": None, "suggestion_msg": None}
+
+        # Villa typos
+        m_v = re.search(r'\b(?:vilas|vila|villas|vla|bnglow|banglow|bangla|kothy)\b', raw_l)
+        if m_v:
+            orig = m_v.group(0)
+            is_misspelled = orig != "villa"
+            msg = {
+                "hi": f"मैंने देखा कि टाइपिंग में '{orig}' हुआ है — मैंने आपके लिए **Villa** दर्ज कर लिया है! 🏡",
+                "hinglish": f"Maine notice kiya aapne '{orig}' likha hai — maine aapke liye **Villa** note kar liya hai! 🏡",
+                "en": f"I noticed a slight typo in '{orig}' — I assume you mean **Villa**! 🏡",
+            }.get(lang, f"I noticed a slight typo in '{orig}' — I assume you mean **Villa**! 🏡") if is_misspelled else None
+            return {"canonical": "Villa", "is_typo": is_misspelled, "original_typo": orig if is_misspelled else None, "suggestion_msg": msg}
+
+        # Penthouse typos
+        m_p = re.search(r'\b(?:penthous|pent house|penthuose|penhouse|penthouse)\b', raw_l)
+        if m_p:
+            orig = m_p.group(0)
+            is_misspelled = orig != "penthouse"
+            msg = {
+                "hi": f"मैंने देखा कि टाइपिंग में '{orig}' हुआ है — मैंने आपके लिए **Penthouse** दर्ज कर लिया है! 🌆",
+                "hinglish": f"Maine notice kiya aapne '{orig}' likha hai — maine aapke liye **Penthouse** note kar liya hai! 🌆",
+                "en": f"I noticed a slight typo in '{orig}' — I assume you mean **Penthouse**! 🌆",
+            }.get(lang, f"I noticed a slight typo in '{orig}' — I assume you mean **Penthouse**! 🌆") if is_misspelled else None
+            return {"canonical": "Penthouse", "is_typo": is_misspelled, "original_typo": orig if is_misspelled else None, "suggestion_msg": msg}
+
+        # 1 RK typos
+        m_rk = re.search(r'\b(?:1\s*rk|1rk|one\s*rk|1\s*rak)\b', raw_l)
+        if m_rk:
+            orig = m_rk.group(0)
+            is_misspelled = orig != "1 rk"
+            msg = {
+                "hi": f"मैंने देखा कि टाइपिंग में '{orig}' हुआ है — मैंने आपके लिए **1 RK** दर्ज कर लिया है! 🏢",
+                "hinglish": f"Maine notice kiya aapne '{orig}' likha hai — maine aapke liye **1 RK** note kar liya hai! 🏢",
+                "en": f"I noticed a slight typo in '{orig}' — I assume you mean **1 RK**! 🏢",
+            }.get(lang, f"I noticed a slight typo in '{orig}' — I assume you mean **1 RK**! 🏢") if is_misspelled else None
+            return {"canonical": "1 RK", "is_typo": is_misspelled, "original_typo": orig if is_misspelled else None, "suggestion_msg": msg}
+
+    # 2. Location Preference
+    if slot_key == "location_preference" or not slot_key:
+        loc_patterns = [
+            (r'\b(?:haldwni|halwani|haldwanni|haldwanii|hldwani|hadlwani)\b', "Haldwani"),
+            (r'\b(?:naintal|nanital|naintall|nainitaal)\b', "Nainital"),
+            (r'\b(?:bhimtall|bhim tal|bhimtaal|bhimtl)\b', "Bhimtal"),
+            (r'\b(?:almorah|almodah|almooda)\b', "Almora"),
+            (r'\b(?:bithoriya|bithori|bithorya)\b', "Bithoria"),
+            (r'\b(?:mukhni|mukhany)\b', "Mukhani"),
+            (r'\b(?:kaldhungi|kaladhungi rd|kaladhugi)\b', "Kaladhungi"),
+            (r'\b(?:rampur rd|rampoor|rampurroad)\b', "Rampur Road"),
+        ]
+        for pat, canonical in loc_patterns:
+            m_l = re.search(pat, raw_l)
+            if m_l:
+                orig = m_l.group(0)
+                msg = {
+                    "hi": f"मैंने देखा कि टाइपिंग में '{orig}' हुआ है — मैंने आपके लिए **{canonical}** दर्ज कर लिया है! 📍",
+                    "hinglish": f"Maine notice kiya aapne '{orig}' likha hai — maine aapke liye **{canonical}** note kar liya hai! 📍",
+                    "en": f"I noticed a slight typo in '{orig}' — I assume you mean **{canonical}**! 📍",
+                }.get(lang, f"I noticed a slight typo in '{orig}' — I assume you mean **{canonical}**! 📍")
+                return {"canonical": canonical, "is_typo": True, "original_typo": orig, "suggestion_msg": msg}
+
+    # 3. Planning / Timeline
+    if slot_key == "planning_to_buy" or not slot_key:
+        time_patterns = [
+            (r'\b(?:imediatly|immidiatly|imediately|immedately|urgenttly|immedatly)\b', "Immediately"),
+            (r'\b(?:withen 1 month|1 mont|1 mnth|one mont)\b', "Within 1 Month"),
+            (r'\b(?:withen 3 month|withen 3 months|3 mont|3 mnths)\b', "Within 3 Months"),
+            (r'\b(?:withen 6 month|withen 6 months|6 mont|6 mnths)\b', "Within 6 Months"),
+            (r'\b(?:withen 12 month|12 mont|12 mnths|1 yr)\b', "Within 12 Months"),
+            (r'\b(?:more then 1 year|more then 1 yr)\b', "More Than 1 Year"),
+            (r'\b(?:just explore|just researching|reaserch|reserch)\b', "Just Exploring / Researching"),
+        ]
+        for pat, canonical in time_patterns:
+            m_t = re.search(pat, raw_l)
+            if m_t:
+                orig = m_t.group(0)
+                msg = {
+                    "hi": f"मैंने देखा कि टाइपिंग में '{orig}' हुआ है — मैंने आपकी समयसीमा **{canonical}** नोट कर ली है! ⏱️",
+                    "hinglish": f"Maine notice kiya aapne '{orig}' likha hai — maine aapka timeline **{canonical}** note kar liya hai! ⏱️",
+                    "en": f"Noted {canonical} (assuming you meant '{canonical}' instead of '{orig}') ⏱️",
+                }.get(lang, f"Noted {canonical} (assuming you meant '{canonical}' instead of '{orig}') ⏱️")
+                return {"canonical": canonical, "is_typo": True, "original_typo": orig, "suggestion_msg": msg}
+
+    # 4. Payment Option
+    if slot_key == "payment_option" or not slot_key:
+        pay_patterns = [
+            (r'\b(?:cashe|ful cash|fullcash|cashe payment|cashpay)\b', "Full Cash Payment"),
+            (r'\b(?:homeloan|bank lone|lone|homelone|mortage|mortgae)\b', "Home Loan (Mortgage)"),
+            (r'\b(?:bank emi|emi finance|bankfin)\b', "Bank Finance with EMI"),
+            (r'\b(?:downpayment|down pay)\b', "Down Payment Plan"),
+            (r'\b(?:instalment|installments|instalments)\b', "Installment Payment Plan"),
+        ]
+        for pat, canonical in pay_patterns:
+            m_p = re.search(pat, raw_l)
+            if m_p:
+                orig = m_p.group(0)
+                msg = {
+                    "hi": f"मैंने देखा कि टाइपिंग में '{orig}' हुआ है — मैंने आपका भुगतान माध्यम **{canonical}** नोट कर लिया है! 💰",
+                    "hinglish": f"Maine notice kiya aapne '{orig}' likha hai — maine aapka payment method **{canonical}** note kar liya hai! 💰",
+                    "en": f"Noted {canonical} (assuming you meant '{canonical}' instead of '{orig}') 💰",
+                }.get(lang, f"Noted {canonical} (assuming you meant '{canonical}' instead of '{orig}') 💰")
+                return {"canonical": canonical, "is_typo": True, "original_typo": orig, "suggestion_msg": msg}
+
+    # 5. Fuzzy match against options list if provided (difflib)
+    if options and isinstance(options, list):
+        for opt in options:
+            opt_s = str(opt).strip()
+            tokens = [t.strip("(),/-") for t in opt_s.lower().split() if len(t.strip("(),/-")) >= 4]
+            close = difflib.get_close_matches(raw_l, tokens, n=1, cutoff=0.72)
+            if close and close[0] != raw_l:
+                msg = {
+                    "hi": f"शायद टाइपिंग में कुछ त्रुटि हुई है — क्या आपका मतलब **{opt_s}** से था? मैंने यह विकल्प आपके लिए नोट कर लिया है! ✅",
+                    "hinglish": f"Lagta hai thodi typing mistake hui — kya aapka matlab **{opt_s}** tha? Maine yeh note kar liya hai! ✅",
+                    "en": f"I noticed a slight typo in '{raw_s}' — I assume you mean **{opt_s}**! ✅",
+                }.get(lang, f"I noticed a slight typo in '{raw_s}' — I assume you mean **{opt_s}**! ✅")
+                return {"canonical": opt_s, "is_typo": True, "original_typo": raw_s, "suggestion_msg": msg}
+
+    return {"canonical": raw_s, "is_typo": False, "original_typo": None, "suggestion_msg": None}
+
+
 def extract_bhk_from_text(msg_lower: str) -> str | None:
-    """Extract standard BHK/property configuration from text."""
-    if any(w in msg_lower for w in ["1 rk", "1rk"]):
+    """Extract standard BHK/property configuration from text, handling typos and variations."""
+    m = re.search(r'\b(1|2|2\.5|3|3\.5|4|5)\s*(?:bhak|bkh|bak|bk|bhck|bka|bhaak|bhk\+?)\b', msg_lower)
+    if m:
+        num = m.group(1)
+        if num == "5" and "+" in msg_lower:
+            return "5 BHK+"
+        return f"{num} BHK"
+    if any(w in msg_lower for w in ["1 rk", "1rk", "1 rak"]):
         return "1 RK"
     elif any(w in msg_lower for w in ["2.5 bhk", "2.5bhk", "2.5 बीएचके"]):
         return "2.5 BHK"
@@ -1756,9 +1920,9 @@ def extract_bhk_from_text(msg_lower: str) -> str | None:
         return "4 BHK"
     elif any(w in msg_lower for w in ["5 bhk", "5bhk", "5 bhk+", "5+ bhk", "5 बीएचके"]):
         return "5 BHK+"
-    elif any(w in msg_lower for w in ["penthouse"]):
+    elif any(w in msg_lower for w in ["penthouse", "penthous", "pent house", "penthuose", "penhouse"]):
         return "Penthouse"
-    elif any(w in msg_lower for w in ["villa", "kothi", "bungalow", "ghar", "makan", "मकान", "घर"]):
+    elif any(w in msg_lower for w in ["villa", "vilas", "vila", "villas", "kothi", "bungalow", "ghar", "makan", "मकान", "घर"]):
         return "Villa"
     return None
 
@@ -1936,6 +2100,7 @@ def _build_system_prompt(first_name: str, known_criteria: dict, is_followup: boo
             f"  1. Schedule a Meeting: {booking_url}\n"
             f"  2. Schedule a Visit: {visit_booking_url}\n"
             f"- CRITICAL: DO NOT invent fake site visits, fake physical addresses, morning/afternoon/evening time slots, or ask for alternate phone numbers. All scheduling must be directed to the Calendly links.\n"
+            f"- SPELLING & TYPO CORRECTION: If the customer makes any spelling mistake or typo (e.g. '3 bhak', 'haldwni', 'cashe'), gently clarify with the correct term ('3 BHK', 'Haldwani', 'Cash') and never repeat the typo in recommendations.\n"
             f"- If customer sends inappropriate or offensive messages, politely steer back to real estate.\n"
             f"- Keep 'is_complete': false so the conversation remains active.\n\n"
             f"Output MUST be a valid JSON object matching this schema:\n"
@@ -2008,6 +2173,13 @@ def _build_system_prompt(first_name: str, known_criteria: dict, is_followup: boo
         f"2. GUIDED QUESTIONNAIRE: Guide the customer step-by-step through their requirements, asking ONE question at a time in this order. Show numbered options and let the customer reply with a number or text:\n\n"
         f"{questionnaire_text}\n\n"
         f"Rules:\n"
+        f"- SPELLING & TYPO ANALYSIS (MANDATORY):\n"
+        f"  If the customer makes any spelling mistake or typo in their message (for example typing '3 bhak', 'haldwni', 'imediatly', 'vilas', 'cashe'):\n"
+        f"  1. In 'reply_message', warmly point out the typo and suggest the correct term:\n"
+        f"     e.g., \"I noticed a slight typo in '3 bhak' — I assume you mean 3 BHK (3 Bedroom, Hall & Kitchen)! 🏢\"\n"
+        f"  2. In 'extracted_slots', NEVER store the typo! Always save the canonical term: e.g. '3 BHK', 'Haldwani', 'Immediately', 'Full Cash Payment', 'Villa'.\n"
+        f"  3. In your suggestions and recommendations, always use the corrected spelling ('3 BHK societies', NEVER '3 bhak societies').\n"
+        f"  4. If the input is completely unrecognizable or ambiguous, politely inform them that it appears misspelled and suggest the valid options to choose from.\n"
         f"- Always provide a brief advisory suggestion/acknowledgement before asking the next question.\n"
         f"- Ask only one question per message.\n"
         f"- Required fields must be answered before you move on. If the customer skips one, politely ask again.\n"
@@ -2236,15 +2408,15 @@ def extract_all_slots_from_text(text: str, current_answers: dict) -> dict:
 
     # 1. Location extraction (cities & localities)
     city = None
-    if any(w in txt_low for w in ["haldwani", "हल्द्वानी"]):
+    if any(w in txt_low for w in ["haldwani", "हल्द्वानी", "haldwni", "halwani", "haldwanni", "hldwani"]):
         city = "Haldwani"
-    elif any(w in txt_low for w in ["nainital", "नैनीताल"]) and any(w in txt_low for w in ["bhimtal", "भीमताल"]):
+    elif (any(w in txt_low for w in ["nainital", "नैनीताल", "naintal", "nanital"]) and any(w in txt_low for w in ["bhimtal", "भीमताल", "bhimtall"])):
         city = "Nainital / Bhimtal"
-    elif any(w in txt_low for w in ["nainital", "नैनीताल"]):
+    elif any(w in txt_low for w in ["nainital", "नैनीताल", "naintal", "nanital", "naintall"]):
         city = "Nainital"
-    elif any(w in txt_low for w in ["bhimtal", "भीमताल"]):
+    elif any(w in txt_low for w in ["bhimtal", "भीमताल", "bhimtall", "bhim tal", "bhimtaal"]):
         city = "Bhimtal"
-    elif any(w in txt_low for w in ["almora", "अल्मोड़ा", "अल्मोडा"]):
+    elif any(w in txt_low for w in ["almora", "अल्मोड़ा", "अल्मोडा", "almorah", "almodah"]):
         city = "Almora"
     elif any(w in txt_low for w in ["bhowali", "भवाली"]):
         city = "Bhowali"
@@ -2267,14 +2439,28 @@ def extract_all_slots_from_text(text: str, current_answers: dict) -> dict:
 
     area = None
     for a in [
-        "rampur road", "kaladhungi road", "kaladhungi", "bithoria", "mukhani", "kusumkhera", "kathgodam",
+        "rampur road", "rampur rd", "rampoor", "kaladhungi road", "kaladhungi rd", "kaladhungi", "kaldhungi",
+        "bithoria", "bithoriya", "mukhani", "mukhni", "kusumkhera", "kathgodam",
         "damuadhunga", "panchakki", "nawabi road", "heera nagar", "tikonia", "kamaluaganja",
         "mallital", "tallital", "pangot", "naukuchiatal", "sattal", "mehragaon", "kasar devi",
         "bright end corner", "ranikhet road", "rajpur road", "sahastradhara", "tapovan", "laxman jhula",
         "kainchi dham", "ramgarh"
     ]:
         if a in txt_low:
-            area = a.title()
+            if a in ["rampur road", "rampur rd", "rampoor"]:
+                area = "Rampur Road"
+                city = "Haldwani"
+            elif a in ["kaladhungi road", "kaladhungi rd", "kaladhungi", "kaldhungi"]:
+                area = "Kaladhungi Road"
+                city = "Haldwani"
+            elif a in ["bithoria", "bithoriya"]:
+                area = "Bithoria"
+                city = "Haldwani"
+            elif a in ["mukhani", "mukhni"]:
+                area = "Mukhani"
+                city = "Haldwani"
+            else:
+                area = a.title()
             if not city:
                 if a in ["rampur road", "kaladhungi road", "kaladhungi", "bithoria", "mukhani", "kusumkhera", "kathgodam", "damuadhunga", "panchakki", "nawabi road", "heera nagar", "tikonia", "kamaluaganja"]:
                     city = "Haldwani"
@@ -2314,7 +2500,7 @@ def extract_all_slots_from_text(text: str, current_answers: dict) -> dict:
 
     # 3. Budget extraction (numeric numbers, crores, lakhs, or standard ranges)
     # Check multi-number ranges first before matching single numbers
-    if any(w in txt_low for w in ["above 2 crore", "over 2 crore", "2 crore+", "2 cr+", "2cr+"]):
+    if any(w in txt_low for w in ["above 2 crore", "over 2 crore", "2 crore+", "2 cr+", "2cr+", "above 2 cr"]):
         extracted["budget_range"] = "Above 2 crore"
     elif any(w in txt_low for w in ["1 crore - 2 crore", "1 to 2 crore", "1-2 cr", "1-2 crore", "1 to 2 cr", "1.5 cr", "1.5 crore", "1.2 cr", "1.8 cr"]):
         extracted["budget_range"] = "1 crore - 2 crore"
@@ -2325,7 +2511,7 @@ def extract_all_slots_from_text(text: str, current_answers: dict) -> dict:
         "50-100 lakh", "50 to 100 lakh", "50-100 lac"
     ]) or re.search(r"\b50\s*(?:-|to)\s*1\s*(?:cr|crore)\b", txt_low):
         extracted["budget_range"] = "50 lakh - 1 crore"
-    elif any(w in txt_low for w in ["up to 25 lakh", "under 25 lakh", "below 25 lakh"]):
+    elif any(w in txt_low for w in ["up to 25 lakh", "under 25 lakh", "below 25 lakh", "upto 25 lakh"]):
         extracted["budget_range"] = "Up to 25 lakh"
     # Single amounts / fallback regex
     elif any(w in txt_low for w in ["50 lakh", "60 lakh", "70 lakh", "80 lakh", "90 lakh", "75 lakh", "65 lakh", "85 lakh", "50 lac", "60 lac", "70 lac", "80 lac"]):
@@ -2360,28 +2546,28 @@ def extract_all_slots_from_text(text: str, current_answers: dict) -> dict:
                 else:
                     extracted["budget_range"] = "Above 2 crore"
 
-    # 4. Timeline extraction
-    if any(w in txt_low for w in ["immediately", "immediate", "urgent", "jaldi", "turant", "ready to move", "तुरंत"]):
+    # 4. Timeline extraction (handling typos like 'imediatly', '1 mont')
+    if any(w in txt_low for w in ["immediately", "immediate", "urgent", "jaldi", "turant", "ready to move", "तुरंत", "imediatly", "immidiatly", "imediately", "immedately", "urgenttly"]):
         extracted["planning_to_buy"] = "Immediately"
-    elif any(w in txt_low for w in ["within 1 month", "1 month", "one month", "next month", "1 mahina", "1 महीने"]):
+    elif any(w in txt_low for w in ["within 1 month", "1 month", "one month", "next month", "1 mahina", "1 महीने", "withen 1 month", "1 mont", "1 mnth"]):
         extracted["planning_to_buy"] = "Within 1 Month"
-    elif any(w in txt_low for w in ["within 3 months", "3 months", "2 months", "1 to 3", "3 mahine", "3 महीने"]):
+    elif any(w in txt_low for w in ["within 3 months", "3 months", "2 months", "1 to 3", "3 mahine", "3 महीने", "withen 3 month", "3 mont", "3 mnths"]):
         extracted["planning_to_buy"] = "Within 3 Months"
-    elif any(w in txt_low for w in ["within 6 months", "6 months", "3 to 6", "6 mahine", "6 महीने"]):
+    elif any(w in txt_low for w in ["within 6 months", "6 months", "3 to 6", "6 mahine", "6 महीने", "withen 6 month", "6 mont", "6 mnths"]):
         extracted["planning_to_buy"] = "Within 6 Months"
-    elif any(w in txt_low for w in ["within 12 months", "12 months", "1 year", "1 saal"]):
+    elif any(w in txt_low for w in ["within 12 months", "12 months", "1 year", "1 saal", "withen 12 month", "12 mont", "1 yr"]):
         extracted["planning_to_buy"] = "Within 12 Months"
-    elif any(w in txt_low for w in ["just exploring", "exploring", "researching", "dekh rahe"]):
+    elif any(w in txt_low for w in ["just exploring", "exploring", "researching", "dekh rahe", "just explore", "reaserch"]):
         extracted["planning_to_buy"] = "Just Exploring / Researching"
 
-    # 5. Payment method extraction
-    if any(w in txt_low for w in ["home loan", "mortgage", "bank finance", "bank loan", "emi", "loan", "लोन"]):
+    # 5. Payment method extraction (handling typos like 'cashe', 'homeloan', 'bank lone')
+    if any(w in txt_low for w in ["home loan", "mortgage", "bank finance", "bank loan", "emi", "loan", "लोन", "homeloan", "bank lone", "lone"]):
         extracted["payment_option"] = "Home Loan (Mortgage)"
-    elif any(w in txt_low for w in ["full cash", "self funded", "own funds", "direct payment", "cash", "नकद", "payement"]):
+    elif any(w in txt_low for w in ["full cash", "self funded", "own funds", "direct payment", "cash", "नकद", "payement", "cashe", "ful cash", "fullcash"]):
         extracted["payment_option"] = "Full Cash Payment"
     elif any(w in txt_low for w in ["down payment", "part payment", "downpayment"]):
         extracted["payment_option"] = "Down Payment Plan"
-    elif any(w in txt_low for w in ["installment", "clp", "construction linked", "किस्त"]):
+    elif any(w in txt_low for w in ["installment", "clp", "construction linked", "किस्त", "instalment"]):
         extracted["payment_option"] = "Construction-Linked Payment Plan (CLP)"
 
     # 6. Remarks / Special requirements extraction
@@ -2781,8 +2967,35 @@ def _sanitize_and_validate_turn(
             expected_q = q
             break
 
+    # Typo Analysis & Detection tracking
+    detected_typo_notice = None
+    detected_typo_token = None
+    detected_canonical = None
+
+    q_opts = (expected_q.get("options") or []) if expected_q else []
+    if not q_opts and expected_slot in STANDARD_OPTIONS:
+        q_opts = STANDARD_OPTIONS[expected_slot]
+
+    # Pre-analyze user message for typos on expected question or any slot
+    if expected_slot:
+        typo_res = detect_and_correct_typos(expected_slot, user_message, options=q_opts, lang=lang)
+        if typo_res["is_typo"]:
+            detected_typo_notice = typo_res["suggestion_msg"]
+            detected_typo_token = typo_res["original_typo"]
+            detected_canonical = typo_res["canonical"]
+
+    for slot_to_check in ["bhk_preference", "planning_to_buy", "payment_option", "location_preference"]:
+        chk = detect_and_correct_typos(slot_to_check, user_message, options=STANDARD_OPTIONS.get(slot_to_check), lang=lang)
+        if chk["is_typo"] and not detected_typo_notice:
+            detected_typo_notice = chk["suggestion_msg"]
+            detected_typo_token = chk["original_typo"]
+            detected_canonical = chk["canonical"]
+
     # 2. Extract standard property slots directly from free-form user message
     freeform_slots = extract_all_slots_from_text(user_message, answers)
+    if expected_slot and detected_canonical and expected_slot not in freeform_slots:
+        freeform_slots[expected_slot] = detected_canonical
+
     for k, v in freeform_slots.items():
         if v and not answers.get(k):
             answers[k] = v
@@ -2805,17 +3018,27 @@ def _sanitize_and_validate_turn(
                 answers["location_preference"] = f"{city_t} ({chosen_area})"
             last_answered_slot = "location_preference"
 
-    # 4. Also merge any slots returned by LLM (Gemini)
+    # 4. Also merge any slots returned by LLM (Gemini), strictly correcting any typos
     for key, val in (extracted or {}).items():
         if not val or not str(val).strip():
             continue
         clean_val = str(val).strip()
         if clean_val.lower() in {"not specified", "none", "unknown", "n/a", "null"}:
             continue
+        corr = detect_and_correct_typos(key, clean_val, options=STANDARD_OPTIONS.get(key), lang=lang)
+        if corr["is_typo"]:
+            clean_val = corr["canonical"]
+            if not detected_typo_notice:
+                detected_typo_notice = corr["suggestion_msg"]
+                detected_typo_token = corr["original_typo"]
+                detected_canonical = corr["canonical"]
         if not answers.get(key):
             answers[key] = clean_val
             if not last_answered_slot:
                 last_answered_slot = key
+        elif key in ["bhk_preference", "budget_range", "planning_to_buy", "payment_option"]:
+            answers[key] = clean_val
+            last_answered_slot = key
 
     # 5. Handle user response for the expected question slot (standard or custom admin question)
     if expected_slot and not answers.get(expected_slot):
@@ -2826,7 +3049,6 @@ def _sanitize_and_validate_turn(
             last_answered_slot = expected_slot
         else:
             # 5b. Match option text from the question's predefined options
-            q_opts = (expected_q.get("options") or []) if expected_q else []
             matched_opt = None
             if q_opts:
                 msg_clean = user_message.strip().lower()
@@ -2838,6 +3060,10 @@ def _sanitize_and_validate_turn(
             if matched_opt:
                 answers[expected_slot] = matched_opt
                 last_answered_slot = expected_slot
+            elif detected_canonical and expected_slot in ["bhk_preference", "planning_to_buy", "payment_option", "location_preference"]:
+                # Corrected typo value
+                answers[expected_slot] = detected_canonical
+                last_answered_slot = expected_slot
             else:
                 # 5c. Free-form text reply (custom feedback, remarks, or any text answer)
                 raw_msg = user_message.strip()
@@ -2847,6 +3073,32 @@ def _sanitize_and_validate_turn(
                 elif raw_msg:
                     answers[expected_slot] = raw_msg
                     last_answered_slot = expected_slot
+
+    # Strict normalization pass across all criteria slots to ensure canonical representation
+    for k in ["bhk_preference", "location_preference", "planning_to_buy", "payment_option", "budget_range"]:
+        if answers.get(k):
+            canon_obj = detect_and_correct_typos(k, answers[k], options=STANDARD_OPTIONS.get(k), lang=lang)
+            answers[k] = canon_obj["canonical"]
+
+    # Sanitize llm_reply to remove any echoed typos and ensure typo suggestion is delivered
+    if detected_typo_token and detected_canonical and llm_reply:
+        llm_reply = re.sub(
+            r'\b' + re.escape(detected_typo_token) + r'\b',
+            detected_canonical,
+            llm_reply,
+            flags=re.IGNORECASE,
+        )
+
+    if detected_typo_notice:
+        has_typo_mention = any(
+            phrase in llm_reply.lower()
+            for phrase in ["typo", "misspell", "assume you mean", "did you mean", "typing mistake", "त्रुटि", "मतलब", "noted 3 bhk"]
+        )
+        if not has_typo_mention:
+            if llm_reply and len(llm_reply.strip()) > 0:
+                llm_reply = f"{detected_typo_notice}\n\n{llm_reply.lstrip()}"
+            else:
+                llm_reply = detected_typo_notice
 
     slots_after = {k: answers.get(k) for k in all_active_keys if answers.get(k)}
     newly_provided_slots = {k: v for k, v in slots_after.items() if k not in slots_before}
@@ -2875,8 +3127,15 @@ def _sanitize_and_validate_turn(
 
     # If all criteria are now answered -> Finish!
     if not remaining_unanswered:
-        ack = _generate_assistant_acknowledgement(last_answered_slot, answers.get(last_answered_slot, ""), lang=lang) if last_answered_slot else ""
-        return answers, ack, True
+        if is_good_llm_reply and llm_reply:
+            finish_reply = llm_reply
+        else:
+            ack = _generate_assistant_acknowledgement(last_answered_slot, answers.get(last_answered_slot, ""), lang=lang) if last_answered_slot else ""
+            if detected_typo_notice and detected_typo_notice not in ack:
+                finish_reply = f"{detected_typo_notice}\n\n{ack}" if ack else detected_typo_notice
+            else:
+                finish_reply = ack
+        return answers, finish_reply, True
 
     # If locality area is pending:
     if area_prompt and "location_preference" not in remaining_unanswered:
@@ -2895,6 +3154,8 @@ def _sanitize_and_validate_turn(
         advisory = generate_multi_slot_analysis_and_suggestions(answers, newly_provided_slots, lang=lang)
     else:
         advisory = _generate_assistant_acknowledgement(last_answered_slot, answers.get(last_answered_slot, ""), lang=lang) if last_answered_slot else ""
+    if detected_typo_notice and detected_typo_notice not in advisory:
+        advisory = f"{detected_typo_notice}\n\n{advisory}" if advisory else detected_typo_notice
     reply_to_send = f"{advisory}\n\n{q_prompt}" if advisory else q_prompt
     return answers, reply_to_send, False
 
@@ -3190,6 +3451,17 @@ def execute_hybrid_ai_turn(
                 )
                 cal_block = _get_calendly_schedule_block(cal_url=meeting_cal_url, answers=cal_ctx, phone=phone, lang=answers.get("language", lang))
                 reply_to_send = f"{reply_to_send}\n\n{cal_block}"
+
+    # Final pass to ensure no typos are echoed anywhere in the final message outside the suggestion quote
+    bhk_val = answers.get("bhk_preference")
+    if bhk_val:
+        m_bhk_typo = re.search(r'\b(1|2|2\.5|3|3\.5|4|5)\s*(?:bhak|bkh|bak|bk|bhck|bka|bhaak)\b', user_message.lower())
+        if m_bhk_typo:
+            typo_t = m_bhk_typo.group(0)
+            reply_to_send = re.sub(r'(?i)\b' + re.escape(typo_t) + r'\s+societies\b', f"{bhk_val} societies", reply_to_send)
+            reply_to_send = re.sub(r'(?i)\b' + re.escape(typo_t) + r'\s+is\b', f"{bhk_val} is", reply_to_send)
+            reply_to_send = re.sub(r'(?i)\b' + re.escape(typo_t) + r'\s+are\b', f"{bhk_val} are", reply_to_send)
+            reply_to_send = re.sub(r'(?i)\b' + re.escape(typo_t) + r'\s+options\b', f"{bhk_val} options", reply_to_send)
 
     # Ensure any stray Calendly URLs in final reply text are completely prefilled
     reply_to_send = _prefill_all_calendly_urls_in_text(reply_to_send, cal_ctx)
