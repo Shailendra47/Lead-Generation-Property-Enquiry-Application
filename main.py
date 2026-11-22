@@ -1516,9 +1516,6 @@ async def process_property_enquiry_submission(
 
         from_number = os.getenv("TWILIO_WHATSAPP_FROM", "+14155238886").strip()
         is_sandbox_mode = re.sub(r"\D", "", from_number) == "14155238886"
-        if is_sandbox_mode:
-            logger.info("WhatsApp outbound push skipped for %s: Twilio Sandbox mode active (customer initiates via prefilled link)", whatsapp_phone)
-            return
 
         # Option 1: Send automatically from server using Twilio WhatsApp API
         content_sid = os.getenv("TWILIO_THANKYOU_SID", os.getenv("TWILIO_WHATSAPP_START_TEMPLATE_SID", "")).strip()
@@ -1546,8 +1543,13 @@ async def process_property_enquiry_submission(
         if not sent_sid:
             try:
                 sent_sid = send_text(whatsapp_phone, whatsapp_msg)
+                if sent_sid:
+                    logger.info("WhatsApp outbound lead delivery sent directly to %s (SID: %s)", whatsapp_phone, sent_sid)
             except Exception as e:
-                logger.warning("WhatsApp send_text failed for %s: %s", whatsapp_phone, e)
+                if is_sandbox_mode:
+                    logger.info("WhatsApp outbound direct push skipped or pending customer sandbox session: %s", e)
+                else:
+                    logger.warning("WhatsApp send_text failed for %s: %s", whatsapp_phone, e)
 
     await run_in_threadpool(_dispatch_whatsapp)
 
@@ -1579,11 +1581,15 @@ async def process_property_enquiry_submission(
 @app.post("/api/enquiry", status_code=201)
 async def create_enquiry(form: EnquiryForm, background_tasks: BackgroundTasks):
     matches = []
-    try:
-        matches = await run_in_threadpool(verified_locations, form.location_preference)
-    except Exception:
-        logger.warning("Location verification provider failed or timed out; accepting enquiry")
-        matches = []
+    if form.location_preference and len(form.location_preference.strip()) >= 2:
+        try:
+            matches = await asyncio.wait_for(
+                run_in_threadpool(verified_locations, form.location_preference),
+                timeout=0.8,
+            )
+        except Exception:
+            logger.warning("Location verification provider failed or timed out; accepting enquiry")
+            matches = []
 
     if matches and not is_verified_place(form.location_preference, matches):
         raise HTTPException(status_code=422, detail="Choose a location from the verified suggestions.")
@@ -4287,7 +4293,12 @@ async def post_enquiry_form(
                 "$set": {
                     "phone": e164_phone,
                     "status": "awaiting_customer_start",
-                    "stage": "q_ai_flow",
+                    "stage": "complete",
+                    "property_lead_id": str(result.inserted_id),
+                    "first_name": first_name,
+                    "last_name": last_name,
+                    "full_name": full_name,
+                    "email": email,
                     "answers": enquiry_answers,
                     "form_requirement": query,
                     "updated_at": now_utc,
@@ -5202,11 +5213,15 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
     clean_text = text.strip()
     is_reset_cmd = clean_text.upper() in {"START", "RESTART", "RESET", "START AGAIN"}
 
+    # Dedicated priority handler: Customer clicked "Check your details here" from Property Form
+    is_check_details_request = bool(
+        re.search(r"(?i)\b(check\s+(your\s+|my\s+)?details(\s+here)?|my\s+details|enquiry\s+details|view\s+details|property\s+details)\b", clean_text)
+    )
+
     # Standalone greeting check using strict word boundaries so words like "hill view", "high", "highway" are NEVER treated as greetings
     is_standalone_greeting = bool(
         re.fullmatch(r"(?i)\s*(hi|hello|hey|hola|namaste|namaskar|pranam)\b[!.,]*", clean_text)
         or re.fullmatch(r"(?i)\s*(hi|hello|hey|namaste|namaskar|pranam)\s+(profilent|team|bot|there|all|everyone)\b[!.,]*", clean_text)
-        or re.search(r"(?i)\bcheck\s+you(r)?\s+details(\s+here)?\b", clean_text)
         or clean_text in {"नमस्ते", "नमस्कार", "प्रणाम", "नमस्ते जी"}
     )
 
@@ -5230,6 +5245,93 @@ async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
     )
     full_name_val = conversation.get("full_name") or answers.get("full_name") or f"{first_name} {last_name}".strip()
     email_val = conversation.get("email") or answers.get("email") or ""
+
+    # Priority 0: Handle "Check your details here" from website Property Form immediately with full details card
+    if is_check_details_request:
+        fresh_enquiry = await request.app.state.enquiries.find_one(
+            {"$or": [
+                {"mobile_number": phone},
+                {"mobile_number": {"$regex": f"{clean_digits}$"}},
+                {"contact_number": phone},
+                {"contact_number": {"$regex": f"{clean_digits}$"}},
+                {"phone": phone},
+                {"phone": {"$regex": f"{clean_digits}$"}},
+            ]},
+            sort=[("created_at", -1)],
+        )
+        if fresh_enquiry:
+            for k in ["location_preference", "bhk_preference", "budget_range", "planning_to_buy", "payment_option", "requirement", "remarks_requirements"]:
+                if fresh_enquiry.get(k) and not answers.get(k):
+                    answers[k] = fresh_enquiry[k]
+            if fresh_enquiry.get("requirement") or fresh_enquiry.get("remarks_requirements"):
+                answers["remarks_requirements"] = fresh_enquiry.get("requirement") or fresh_enquiry.get("remarks_requirements")
+            if (not full_name_val or full_name_val == "there") and fresh_enquiry.get("full_name"):
+                full_name_val = fresh_enquiry["full_name"]
+            if not email_val and fresh_enquiry.get("email"):
+                email_val = fresh_enquiry["email"]
+            if not first_name or first_name == "there":
+                first_name = fresh_enquiry.get("first_name") or (full_name_val.split()[0] if full_name_val else "Valued Client")
+
+        # Auto-clean any typo in preferences (e.g. 3 bhak -> 3 BHK)
+        try:
+            from conversation_ai import detect_and_correct_typos
+            for slot_k in ["bhk_preference", "location_preference", "budget_range", "planning_to_buy", "payment_option"]:
+                val = answers.get(slot_k)
+                if val:
+                    res_typo = detect_and_correct_typos(slot_k, val)
+                    if isinstance(res_typo, dict) and res_typo.get("is_typo") and res_typo.get("canonical"):
+                        answers[slot_k] = res_typo["canonical"]
+        except Exception:
+            pass
+
+        summary_data = {
+            **answers,
+            "full_name": full_name_val or first_name,
+            "first_name": first_name or (full_name_val.split()[0] if full_name_val else "Valued Client"),
+            "last_name": last_name,
+            "email": email_val,
+            "phone": phone,
+            "mobile_number": answers.get("mobile_number") or phone,
+        }
+
+        ai_recommendations = ""
+        try:
+            from conversation_ai import generate_completion_lead_analysis
+            ai_recommendations = generate_completion_lead_analysis(summary_data, lang=lang)
+        except Exception:
+            ai_recommendations = ""
+
+        summary_card = format_completion_summary_message(
+            summary_data,
+            first_name=summary_data["first_name"],
+            schedule_url=schedule_page_url(),
+            lang=lang,
+        )
+
+        full_reply = f"{ai_recommendations}\n\n{summary_card}".strip() if ai_recommendations else summary_card
+
+        now_iso = now.isoformat()
+        await conversations.update_one(
+            {"_id": conversation["_id"]},
+            {
+                "$push": {
+                    "messages": {
+                        "$each": [
+                            {"role": "user", "content": clean_text, "timestamp": now_iso},
+                            {"role": "assistant", "content": full_reply, "timestamp": now_iso},
+                        ]
+                    }
+                },
+                "$set": {
+                    "status": "complete",
+                    "stage": "complete",
+                    "answers": summary_data,
+                    "last_inbound_at": now,
+                    "updated_at": now,
+                },
+            },
+        )
+        return twiml(full_reply)
 
     has_full_property_enquiry = bool(
         answers.get("location_preference")
