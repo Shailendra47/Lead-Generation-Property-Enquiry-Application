@@ -27,7 +27,7 @@ from bson import ObjectId
 from bson.errors import InvalidId
 from dotenv import load_dotenv
 from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Query, Request, status
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import AliasChoices, BaseModel, EmailStr, Field, field_validator, model_validator
 from pymongo import AsyncMongoClient, ReturnDocument, UpdateOne
@@ -6522,6 +6522,307 @@ async def send_calendly_confirmation(events, leads, lead_id, invitee_uri, recipi
     await events.update_one(
         {"invitee_uri": invitee_uri},
         {"$set": {"status": status, "twilio_message_sid": message_sid, "updated_at": now}},
+    )
+
+
+# =============================================================
+# Automated Phone Call & Missed-Call Capture (via Twilio Voice)
+# =============================================================
+
+async def _parse_incoming_form_or_body(request: Request) -> dict[str, str]:
+    """Safely parse incoming application/x-www-form-urlencoded data from Twilio webhooks."""
+    try:
+        form = await request.form()
+        return {k: str(v) for k, v in dict(form).items()}
+    except Exception:
+        body_bytes = await request.body()
+        from urllib.parse import parse_qs
+        parsed = parse_qs(body_bytes.decode("utf-8", errors="replace"))
+        return {k: v[0] if len(v) == 1 else ",".join(v) for k, v in parsed.items()}
+
+
+@app.api_route("/webhooks/voice", methods=["GET", "POST"])
+@app.api_route("/webhooks/voice/", methods=["GET", "POST"])
+@app.api_route("/webhook/voice", methods=["GET", "POST"])
+@app.api_route("/webhook/voice/", methods=["GET", "POST"])
+@app.api_route("/api/webhooks/voice", methods=["GET", "POST"])
+@app.api_route("/api/webhook/voice", methods=["GET", "POST"])
+async def voice_inbound_webhook(request: Request, background_tasks: BackgroundTasks):
+    """Twilio Voice Inbound Call Webhook:
+    1. Captures Caller ID, timestamp, and location.
+    2. Registers or links the lead in MongoDB (source="Inbound Phone Call", Lead_Source="Phone Call").
+    3. Plays a polite real-estate greeting.
+    4. Forwards/bridges the call live to AGENT_PHONE (+918218733395) with status callback.
+    """
+    if request.method == "GET":
+        return HTMLResponse("<h3>Profilent Twilio Voice Webhook endpoint is active.</h3>", status_code=200)
+
+    params = await _parse_incoming_form_or_body(request)
+    raw_from = str(params.get("From") or "").strip()
+    call_sid = str(params.get("CallSid") or "").strip()
+    caller_city = str(params.get("FromCity") or "").strip()
+    caller_state = str(params.get("FromState") or "").strip()
+    caller_country = str(params.get("FromCountry") or "IN").strip()
+
+    # Clean and format phone number to E.164
+    caller_phone = re.sub(r"[\s()-]", "", raw_from)
+    if caller_phone and not caller_phone.startswith("+"):
+        caller_phone = f"+91{caller_phone.lstrip('0')}"
+
+    now_utc = datetime.now(timezone.utc)
+    clean_digits = re.sub(r"\D", "", caller_phone)[-10:] if len(caller_phone) >= 10 else caller_phone
+
+    # Check if caller is an existing customer in enquiries or contacts
+    existing_enq = None
+    if clean_digits:
+        existing_enq = await request.app.state.enquiries.find_one(
+            {"$or": [
+                {"mobile_number": caller_phone},
+                {"mobile_number": {"$regex": f"{clean_digits}$"}},
+                {"phone": caller_phone},
+                {"phone": {"$regex": f"{clean_digits}$"}},
+                {"contact_number": caller_phone},
+                {"contact_number": {"$regex": f"{clean_digits}$"}},
+            ]},
+            sort=[("created_at", -1)],
+        )
+
+    if existing_enq:
+        fn = existing_enq.get("first_name", "")
+        ln = existing_enq.get("last_name", "")
+        full_name = existing_enq.get("full_name") or f"{fn} {ln}".strip() or f"Caller ({caller_phone[-4:] if len(caller_phone) >= 4 else caller_phone})"
+        email = existing_enq.get("email") or ""
+        loc_pref = existing_enq.get("location_preference") or ""
+        bhk_pref = existing_enq.get("bhk_preference") or ""
+        budget_rng = existing_enq.get("budget_range") or ""
+        req = existing_enq.get("remarks_requirements") or existing_enq.get("requirement") or ""
+    else:
+        full_name = f"Inbound Caller ({caller_phone[-4:] if len(caller_phone) >= 4 else caller_phone})"
+        fn = "Caller"
+        ln = ""
+        email = ""
+        loc_pref = f"{caller_city}, {caller_state}".strip(", ") if (caller_city or caller_state) else ""
+        bhk_pref = ""
+        budget_rng = ""
+        req = "Live incoming phone call from prospective property buyer"
+
+    # Save Inbound Call Lead immediately in MongoDB
+    call_lead_doc = {
+        "first_name": fn or "Caller",
+        "last_name": ln,
+        "full_name": full_name,
+        "email": email,
+        "mobile_number": caller_phone,
+        "phone": caller_phone,
+        "contact_number": caller_phone,
+        "location_preference": loc_pref,
+        "bhk_preference": bhk_pref,
+        "budget_range": budget_rng,
+        "requirement": req,
+        "remarks_requirements": req,
+        "source": "Inbound Phone Call",
+        "Lead_Source": "Phone Call",
+        "call_sid": call_sid,
+        "call_status": "ringing",
+        "call_direction": "inbound",
+        "caller_city": caller_city,
+        "caller_state": caller_state,
+        "caller_country": caller_country,
+        "call_received_at": now_utc,
+        "created_at": now_utc,
+        "updated_at": now_utc,
+        "lead_rating": "Hot",
+        "lead_score": 85,
+        "ai_rating": "Hot",
+        "ai_analysis": f"Hot Inbound Phone Call lead received from {caller_phone}. Immediate buyer intent.",
+        "zoho_sync_status": "pending",
+        "zoho_sync_reason": "Inbound call lead logged and queued for automatic sync",
+    }
+
+    try:
+        res = await request.app.state.enquiries.insert_one(call_lead_doc)
+        lead_id = str(res.inserted_id)
+        call_lead_doc["_id"] = res.inserted_id
+        call_lead_doc["local_id"] = lead_id
+        logger.info("Twilio Voice Inbound Call logged as lead %s for %s (SID: %s)", lead_id, caller_phone, call_sid)
+    except Exception as exc:
+        logger.error("Failed to insert call lead into MongoDB: %s", exc)
+        lead_id = ""
+
+    # Generate Twilio Voice TwiML
+    agent_phone = (os.getenv("AGENT_PHONE", "+918218733395").strip() or "+918218733395").strip()
+    public_base = (os.getenv("PUBLIC_BASE_URL", "").rstrip("/") or PUBLIC_BASE_URL).rstrip("/")
+    status_callback_url = f"{public_base}/webhooks/voice/status"
+
+    twiml_xml = f"""<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+    <Say language="en-IN" voice="Polly.Aditi">Thank you for calling Profilent Properties. Please hold while we connect your call to our property specialist.</Say>
+    <Dial timeout="25" action="{status_callback_url}" method="POST">
+        <Number>{agent_phone}</Number>
+    </Dial>
+    <Say language="en-IN" voice="Polly.Aditi">All our property specialists are currently assisting other clients. We have sent our property catalog to your WhatsApp and an advisor will call you back shortly. Thank you!</Say>
+</Response>"""
+    return Response(
+        content=twiml_xml.encode("utf-8"),
+        media_type="text/xml",
+        headers={"Content-Type": "text/xml; charset=utf-8"},
+    )
+
+
+@app.api_route("/webhooks/voice/status", methods=["GET", "POST"])
+@app.api_route("/webhooks/voice/status/", methods=["GET", "POST"])
+@app.api_route("/webhook/voice/status", methods=["GET", "POST"])
+@app.api_route("/webhook/voice/status/", methods=["GET", "POST"])
+@app.api_route("/api/webhooks/voice/status", methods=["GET", "POST"])
+@app.api_route("/api/webhook/voice/status", methods=["GET", "POST"])
+async def voice_status_webhook(request: Request, background_tasks: BackgroundTasks):
+    """Twilio Voice Call Status Callback:
+    1. Receives CallDuration and DialCallStatus (completed, busy, no-answer, failed, canceled).
+    2. Answered Call: Updates duration, syncs to Zoho CRM as Phone Call, and sends post-call WhatsApp summary.
+    3. Missed Call: Flags lead as "🚨 Urgent Missed Call Lead", alerts salesperson via email,
+       sends an automated WhatsApp apology & booking link to the caller, and syncs to Zoho CRM.
+    """
+    if request.method == "GET":
+        return HTMLResponse("<h3>Profilent Twilio Voice Status endpoint is active.</h3>", status_code=200)
+
+    params = await _parse_incoming_form_or_body(request)
+    raw_from = str(params.get("From") or "").strip()
+    call_sid = str(params.get("CallSid") or "").strip()
+    dial_status = str(params.get("DialCallStatus") or params.get("CallStatus") or "completed").strip().lower()
+    dial_duration_raw = params.get("DialCallDuration") or params.get("CallDuration") or 0
+    try:
+        call_duration = int(dial_duration_raw)
+    except (ValueError, TypeError):
+        call_duration = 0
+
+    caller_phone = re.sub(r"[\s()-]", "", raw_from)
+    if caller_phone and not caller_phone.startswith("+"):
+        caller_phone = f"+91{caller_phone.lstrip('0')}"
+
+    clean_digits = re.sub(r"\D", "", caller_phone)[-10:] if len(caller_phone) >= 10 else caller_phone
+    now_utc = datetime.now(timezone.utc)
+    ist_str = datetime.now(IST).strftime("%d %b %Y, %I:%M %p IST")
+
+    # Locate the lead doc in enquiries
+    lead_doc = None
+    if call_sid:
+        lead_doc = await request.app.state.enquiries.find_one({"call_sid": call_sid}, sort=[("created_at", -1)])
+    if not lead_doc and clean_digits:
+        lead_doc = await request.app.state.enquiries.find_one(
+            {"$or": [
+                {"mobile_number": caller_phone},
+                {"mobile_number": {"$regex": f"{clean_digits}$"}},
+                {"phone": caller_phone},
+                {"phone": {"$regex": f"{clean_digits}$"}},
+            ]},
+            sort=[("created_at", -1)],
+        )
+
+    full_name = lead_doc.get("full_name") or f"Inbound Caller ({caller_phone[-4:] if len(caller_phone) >= 4 else caller_phone})" if lead_doc else f"Inbound Caller ({caller_phone[-4:]})"
+    first_name = lead_doc.get("first_name") or full_name.split()[0] if lead_doc else "there"
+    is_missed_call = dial_status in ("busy", "no-answer", "failed", "canceled") or (call_duration == 0 and dial_status != "completed")
+
+    update_fields = {
+        "call_status": "missed" if is_missed_call else "completed",
+        "dial_status": dial_status,
+        "call_duration": call_duration,
+        "updated_at": now_utc,
+    }
+
+    if is_missed_call:
+        update_fields["lead_rating"] = "Hot"
+        update_fields["lead_score"] = 95
+        update_fields["ai_rating"] = "Hot"
+        update_fields["ai_analysis"] = f"🚨 URGENT: Missed Call Lead from {caller_phone} at {ist_str} (Status: {dial_status}). Immediate callback required."
+        update_fields["zoho_sync_reason"] = "Urgent Missed Call Lead queued for Zoho CRM sync"
+    else:
+        update_fields["ai_analysis"] = f"Connected Inbound Phone Call with {caller_phone} (Duration: {call_duration}s) at {ist_str}."
+        update_fields["zoho_sync_reason"] = "Connected Phone Call lead synced to Zoho CRM"
+
+    lead_id_str = str(lead_doc["_id"]) if lead_doc else ""
+    if lead_doc:
+        await request.app.state.enquiries.update_one({"_id": lead_doc["_id"]}, {"$set": update_fields})
+
+    # Prepare merged payload for Zoho CRM and background notifications
+    merged_lead = {
+        **(lead_doc or {}),
+        **update_fields,
+        "id": lead_id_str,
+        "local_id": lead_id_str,
+        "full_name": full_name,
+        "first_name": first_name,
+        "mobile_number": caller_phone,
+        "phone": caller_phone,
+        "source": "Missed Call Lead" if is_missed_call else "Inbound Phone Call",
+        "Lead_Source": "Phone Call",
+    }
+
+    # 1. Trigger Zoho CRM sync for Call Lead
+    background_tasks.add_task(
+        sync_zoho_lead,
+        merged_lead,
+        force=True,
+    )
+    background_tasks.add_task(sync_and_save_upserted_leads, request.app.state)
+
+    # 2. If Missed Call -> Alert Salesperson immediately via email
+    if is_missed_call:
+        sales_alert_fields = {
+            "Alert Type": "🚨 URGENT: MISSED CALL FROM PROSPECTIVE BUYER",
+            "Caller Phone": caller_phone,
+            "Customer Name": full_name,
+            "Call Time": ist_str,
+            "Dial Outcome": f"{dial_status.upper()} (No agent answered)",
+            "Call SID": call_sid or "N/A",
+            "Action Required": "Call back the prospect immediately! Lead is recorded in Zoho CRM and sent WhatsApp onboarding.",
+        }
+        background_tasks.add_task(
+            send_salesperson_notification,
+            f"🚨 URGENT: Missed Call Lead - {caller_phone}",
+            sales_alert_fields,
+        )
+
+    # 3. Automated WhatsApp follow-up to the caller
+    def _dispatch_call_whatsapp():
+        if not caller_phone or len(caller_phone) < 10:
+            return
+
+        meeting_url = schedule_page_url()
+        visit_url = CALENDLY_VISIT_URL
+
+        if is_missed_call:
+            wa_text = (
+                f"Hi {first_name}! 🏡 Thank you for calling Profilent Properties.\n\n"
+                f"We're sorry we missed your call just now ({ist_str})! Our property specialists are eager to assist you with your property search in Haldwani & Uttarakhand.\n\n"
+                "A specialist will call you back shortly. In the meantime, you can easily schedule a consultation or property visit at your preferred time below:\n\n"
+                f"1️⃣ Schedule a Consultation Call:\n👉 {meeting_url}\n\n"
+                f"2️⃣ Schedule an In-Person Site Visit:\n👉 {visit_url}\n\n"
+                "Or simply reply to this message with your preferred location, BHK & budget!"
+            )
+        else:
+            wa_text = (
+                f"Hi {first_name}! 🏡 Thank you for speaking with Profilent Properties.\n\n"
+                "It was a pleasure connecting with you! Our team is preparing hand-picked verified options tailored to your preferences.\n\n"
+                "To book a dedicated consultation or an in-person site visit with our senior advisor, please select an option below:\n\n"
+                f"1️⃣ Schedule a Consultation Meeting:\n👉 {meeting_url}\n\n"
+                f"2️⃣ Schedule an In-Person Site Visit:\n👉 {visit_url}\n\n"
+                "Feel free to reply directly to this message with any questions or specific requirements!"
+            )
+
+        try:
+            sent_sid = send_text(caller_phone, wa_text)
+            if sent_sid:
+                logger.info("Call follow-up WhatsApp sent to %s (SID: %s, Missed: %s)", caller_phone, sent_sid, is_missed_call)
+        except Exception as exc:
+            logger.info("Could not send automated call WhatsApp to %s: %s", caller_phone, exc)
+
+    background_tasks.add_task(_dispatch_call_whatsapp)
+
+    # Return clean empty TwiML response to end call cleanly
+    return Response(
+        content=b'<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
+        media_type="text/xml",
+        headers={"Content-Type": "text/xml; charset=utf-8"},
     )
 
 

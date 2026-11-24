@@ -416,6 +416,21 @@ def evaluate_lead_quality(lead: dict) -> dict:
         triggers.append("Direct consultation meeting booked on Calendly")
         reasons.append(f"Meeting booked: {calendly_event or 'Advisor session'}")
 
+    # 1b. Direct Phone Call inquiry - immediate high buyer intent
+    is_call_lead = (
+        lead.get("Lead_Source") in ("Phone Call", "Inbound Call")
+        or "call" in source_str
+        or any("call" in s for s in sources_set)
+    )
+    if is_call_lead:
+        score += 35
+        triggers.append("Direct inbound phone call (High intent buyer)")
+        reasons.append("Customer dialed Profilent sales line directly")
+        if lead.get("call_status") in ("no-answer", "busy", "missed", "failed", "canceled"):
+            score += 25
+            triggers.append("🚨 Urgent Missed Call - Needs immediate callback")
+            reasons.append("Missed call from prospect; immediate callback required")
+
     # 2. Timeline scoring
     p_low = planning.lower()
     if any(u in p_low for u in ["immediately", "within 1 month", "1 month", "urgent", "immediate"]):
@@ -676,7 +691,9 @@ def _sync_zoho_account(lead: dict, session: requests.Session, api_domain: str, t
         or bool(wa_answers or lead.get("whatsapp_answers") or lead.get("whatsapp_conversation_id"))
         or any(r.get("entity") == "conversation" for r in lead.get("records", []) if isinstance(r, dict))
     )
-    if has_wa:
+    if lead.get("Lead_Source") in ("Phone Call", "Inbound Call") or "call" in raw_source or any("call" in s for s in sources_list):
+        source_name = "Phone Call"
+    elif has_wa:
         source_name = "WhatsApp"
     elif any("calendly" in s for s in sources_list) or "calendly" in raw_source or lead.get("calendly_event_name"):
         source_name = "Calendly Booking"
@@ -868,8 +885,10 @@ def sync_zoho_lead(
         if lead.get("calendly_join_url"):
             description_sections.append(f"Meeting URL         : {lead['calendly_join_url']}")
 
-        if explicit_source in ("WhatsApp", "Property Form"):
-            mapped_source = explicit_source
+        if explicit_source in ("WhatsApp", "Property Form", "Phone Call", "Inbound Call"):
+            mapped_source = "Phone Call" if explicit_source in ("Phone Call", "Inbound Call") else explicit_source
+        elif "call" in raw_source or any("call" in s for s in sources_list):
+            mapped_source = "Phone Call"
         elif has_wa:
             mapped_source = "WhatsApp"
         elif "property" in raw_source or "enquiry" in raw_source or any("property" in s or "enquiry" in s for s in sources_list):
@@ -1064,7 +1083,9 @@ def sync_upserted_lead_to_zoho(lead: dict) -> str | None:
         or bool(lead_copy.get("whatsapp_conversation_id"))
         or any(r.get("entity") == "conversation" for r in lead_copy.get("records", []) if isinstance(r, dict))
     )
-    if has_wa:
+    if lead_copy.get("Lead_Source") in ("Phone Call", "Inbound Call") or "call" in raw_source or any("call" in s for s in sources_list):
+        lead_copy["Lead_Source"] = "Phone Call"
+    elif has_wa:
         lead_copy["Lead_Source"] = "WhatsApp"
     elif any("property" in s or "enquiry" in s for s in sources_list) or "property" in raw_source or "enquiry" in raw_source:
         lead_copy["Lead_Source"] = "Property Form"
